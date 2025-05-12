@@ -56,10 +56,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 # Pull a smaller LLM model to reduce latency (optional, can be changed to the recommended model)
 echo "Pulling LLM model (gemma2:2b for faster inference)..."
 export OLLAMA_MODELS=/workspace/ollama_models
+# ollama pull hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M
 ollama pull gemma2:2b
-
-# Update llm_module.py to use the smaller model (optional)
-echo "Configuring llm_module.py to use gemma2:2b..."
-sed -i 's|model="hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M"|model="gemma2:2b"|' code/llm_module.py
 
 echo "Installation complete. Use start.sh to start the server and stop.sh to stop it."
