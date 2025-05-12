@@ -26,10 +26,19 @@ export OLLAMA_MODELS=/workspace/ollama_models
 ollama serve &
 sleep 5  # Wait for Ollama to start
 
-# Verify Ollama is running
-if netstat -tulnp 2>/dev/null | grep -q 11434; then
-    echo "Ollama server started successfully."
-else
+# Verify Ollama is running (retry up to 3 times)
+OLLAMA_STARTED=false
+for i in {1..3}; do
+    if netstat -tulnp 2>/dev/null | grep -q 11434; then
+        echo "Ollama server started successfully."
+        OLLAMA_STARTED=true
+        break
+    fi
+    echo "Waiting for Ollama server to start (attempt $i/3)..."
+    sleep 3
+done
+
+if [ "$OLLAMA_STARTED" != "true" ]; then
     echo "Failed to start Ollama server. Check logs for errors."
     exit 1
 fi
@@ -37,14 +46,25 @@ fi
 # Start uvicorn server
 echo "Starting uvicorn server..."
 cd code
-uvicorn server:app --host 0.0.0.0 --port 8000 &
-sleep 5  # Wait for uvicorn to start
+uvicorn server:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+UVICORN_PID=$!
+sleep 10  # Wait longer for uvicorn to start
 
-# Verify uvicorn is running
-if netstat -tulnp 2>/dev/null | grep -q 8000; then
-    echo "Uvicorn server started successfully on http://<pod-ip>:8000"
-else
-    echo "Failed to start uvicorn server. Check logs for errors."
+# Verify uvicorn is running (retry up to 3 times)
+UVICORN_STARTED=false
+for i in {1..3}; do
+    if netstat -tulnp 2>/dev/null | grep -q 8000; then
+        echo "Uvicorn server started successfully on http://<pod-ip>:8000"
+        UVICORN_STARTED=true
+        break
+    fi
+    echo "Waiting for uvicorn server to start (attempt $i/3)..."
+    sleep 3
+done
+
+if [ "$UVICORN_STARTED" != "true" ]; then
+    echo "Failed to start uvicorn server. Check logs in uvicorn.log for errors."
+    cat uvicorn.log
     exit 1
 fi
 
