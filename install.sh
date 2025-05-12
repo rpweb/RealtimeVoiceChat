@@ -53,10 +53,29 @@ pip list | grep -E "RealtimeSTT|RealtimeTTS|fastapi|uvicorn|websockets|ollama|de
 echo "Installing Ollama..."
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Pull a smaller LLM model to reduce latency (optional, can be changed to the recommended model)
-echo "Pulling LLM model (gemma2:2b for faster inference)..."
+# Start Ollama server
+echo "Starting Ollama server for model pulling..."
 export OLLAMA_MODELS=/workspace/ollama_models
-# ollama pull hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M
+ollama serve &
+sleep 5  # Wait for Ollama to start
+
+# Verify Ollama is running
+if netstat -tulnp 2>/dev/null | grep -q 11434; then
+    echo "Ollama server started successfully for model pulling."
+else
+    echo "Failed to start Ollama server. Cannot pull models."
+    exit 1
+fi
+
+# Pull a smaller LLM model to reduce latency
+echo "Pulling LLM model (gemma2:2b for faster inference)..."
 ollama pull gemma2:2b
+
+# Stop Ollama server after pulling
+OLLAMA_PID=$(netstat -tulnp 2>/dev/null | grep 11434 | awk '{print $7}' | cut -d'/' -f1)
+if [ ! -z "$OLLAMA_PID" ]; then
+    echo "Stopping Ollama server (PID: $OLLAMA_PID) after pulling model..."
+    kill -9 $OLLAMA_PID
+fi
 
 echo "Installation complete. Use start.sh to start the server and stop.sh to stop it."
