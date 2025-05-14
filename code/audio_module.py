@@ -4,6 +4,7 @@ import os
 import struct
 import threading
 import time
+import platform
 from collections import namedtuple
 from queue import Queue
 from typing import Callable, Generator, Optional
@@ -16,6 +17,11 @@ from RealtimeTTS import (CoquiEngine, KokoroEngine, OrpheusEngine,
 
 logger = logging.getLogger(__name__)
 
+# Detect Apple Silicon Mac
+IS_APPLE_SILICON = (platform.system() == "Darwin" and 
+                   (platform.machine() == "arm64" or 
+                    platform.processor() == "arm"))
+
 # Default configuration constants
 START_ENGINE = "kokoro"
 Silence = namedtuple("Silence", ("comma", "sentence", "default"))
@@ -27,6 +33,11 @@ ENGINE_SILENCES = {
 # Stream chunk sizes influence latency vs. throughput trade-offs
 QUICK_ANSWER_STREAM_CHUNK_SIZE = 8
 FINAL_ANSWER_STREAM_CHUNK_SIZE = 30
+
+# Adjust chunk sizes for Apple Silicon to improve quality
+if IS_APPLE_SILICON:
+    QUICK_ANSWER_STREAM_CHUNK_SIZE = 12  # Increased for better quality on Apple Silicon
+    FINAL_ANSWER_STREAM_CHUNK_SIZE = 40  # Increased for better quality on Apple Silicon
 
 # Coqui model download helper functions
 def create_directory(path: str) -> None:
@@ -104,13 +115,19 @@ class AudioProcessor:
         # Dynamically load and configure the selected TTS engine
         if engine == "coqui":
             ensure_lasinya_models(models_root="models", model_name="Lasinya")
+            
+            # Disable DeepSpeed on Apple Silicon as it's not supported
+            use_deepspeed = not IS_APPLE_SILICON
+            if IS_APPLE_SILICON:
+                logger.info("👄🍎 Apple Silicon detected - Optimizing Coqui TTS for MPS backend")
+                
             self.engine = CoquiEngine(
                 specific_model="Lasinya",
                 local_models_path="./models",
                 voice="reference_audio.wav",
                 speed=1.1,
-                use_deepspeed=True,
-                thread_count=6,
+                use_deepspeed=use_deepspeed,
+                thread_count=6 if not IS_APPLE_SILICON else 4,  # Reduced threads for Apple Silicon
                 stream_chunk_size=self.current_stream_chunk_size,
                 overlap_wav_len=1024,
                 load_balancing=True,

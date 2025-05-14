@@ -14,11 +14,18 @@ import json
 import copy
 import time
 import re
+import platform
+import sys
 from typing import Optional, Callable, Any, Dict, List
 
 # --- Configuration Flags ---
 USE_TURN_DETECTION = True
 START_STT_SERVER = False # Set to True to use the client/server version of RealtimeSTT
+
+# Detect Apple Silicon Mac
+IS_APPLE_SILICON = (platform.system() == "Darwin" and 
+                   (platform.machine() == "arm64" or 
+                    platform.processor() == "arm"))
 
 # --- Recorder Configuration (Moved here for clarity, can be externalized) ---
 # Default config if none provided to constructor
@@ -42,14 +49,21 @@ DEFAULT_RECORDER_CONFIG: Dict[str, Any] = {
     "beam_size": 3,
     "beam_size_realtime": 3,
     "no_log_file": True,
-    "wake_words": "jarvis",
-    "wakeword_backend": "pvporcupine",
+    # Only include wake word settings if not on Apple Silicon
     "allowed_latency_limit": 500,
     # Callbacks will be added dynamically in _create_recorder
     "debug_mode": True,
     "initial_prompt_realtime": "The sky is blue. When the sky... She walked home. Because he... Today is sunny. If only I...",
     "faster_whisper_vad_filter": False,
 }
+
+# Add wake word settings only if not on Apple Silicon
+if not IS_APPLE_SILICON:
+    DEFAULT_RECORDER_CONFIG["wake_words"] = "jarvis"
+    DEFAULT_RECORDER_CONFIG["wakeword_backend"] = "pvporcupine"
+else:
+    logger.info(f"👂🍎 {Colors.apply('Apple Silicon detected').yellow} - Disabling wake word detection completely")
+    # No wake word settings for Apple Silicon
 
 
 if START_STT_SERVER:
@@ -732,10 +746,8 @@ class TranscriptionProcessor:
 
         # Add dynamically assigned callbacks using the CORRECT keys for AudioToTextRecorder
         active_config["on_realtime_transcription_update"] = on_partial
-        # *** CORRECTED MAPPING ***
         active_config["on_turn_detection_start"] = start_silence_detection # Triggered when silence starts (speech ends)
         active_config["on_turn_detection_stop"] = stop_silence_detection  # Triggered when silence stops (speech starts)
-        # *** END CORRECTION ***
         active_config["on_recording_start"] = start_recording
         active_config["on_recording_stop"] = stop_recording # This callback happens before final text
 
@@ -763,13 +775,11 @@ class TranscriptionProcessor:
                 # Note: The client might use different callback names, adjust if needed
                 # For now, assume it might accept the same or handle internally
                 self.recorder = AudioToTextRecorderClient(**active_config)
-                # Ensure wake words are disabled if needed (can also be done via config dict)
-                self._set_recorder_param("use_wake_words", False)
             else:
                 # Instantiate the LOCAL recorder with the corrected active_config
                 self.recorder = AudioToTextRecorder(**active_config)
-                # Ensure wake words are disabled if needed (double check via param setting)
-                self._set_recorder_param("use_wake_words", False) # Uses the helper method
+                # Use _set_recorder_param to set parameters after initialization if needed
+                # For example, if we need to set parameters that aren't constructor arguments
 
             logger.info(f"👂✅ {recorder_type} instance created successfully.")
 

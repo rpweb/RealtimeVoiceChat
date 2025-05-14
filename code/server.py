@@ -18,6 +18,7 @@ import time
 import threading # Keep threading for SpeechPipelineManager internals and AbortWorker
 import sys
 import os # Added for environment variable access
+import platform # Added for platform detection
 
 from typing import Any, Dict, Optional, Callable # Added for type hints in docstrings
 from contextlib import asynccontextmanager
@@ -27,10 +28,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import HTMLResponse, Response, FileResponse
 
+# Detect Apple Silicon Mac
+IS_APPLE_SILICON = (platform.system() == "Darwin" and 
+                   (platform.machine() == "arm64" or 
+                    platform.processor() == "arm"))
+
 USE_SSL = False
-TTS_START_ENGINE = "orpheus"
-TTS_START_ENGINE = "kokoro"
-TTS_START_ENGINE = "coqui"
+# Choose TTS engine based on platform
+if IS_APPLE_SILICON:
+    # Use Coqui as default on Apple Silicon with optimized settings
+    TTS_START_ENGINE = "coqui"
+    logger.info(f"🖥️🍎 {Colors.apply('Apple Silicon detected').yellow} - Using Coqui TTS engine with optimized settings")
+else:
+    # Use defaults on other platforms
+    TTS_START_ENGINE = "orpheus"
+    TTS_START_ENGINE = "kokoro"
+    TTS_START_ENGINE = "coqui"
+
 TTS_ORPHEUS_MODEL = "Orpheus_3B-1BaseGGUF/mOrpheus_3B-1Base_Q4_K_M.gguf"
 TTS_ORPHEUS_MODEL = "orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf"
 

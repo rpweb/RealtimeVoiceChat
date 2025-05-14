@@ -1,0 +1,33 @@
+# Python virtual environment
+venv/
+env/
+.env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.log
+logs/
+ollama_models/
+.cache/
+wheels/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/ 
+code/models

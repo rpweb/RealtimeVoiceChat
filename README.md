@@ -223,6 +223,10 @@ Want to tweak the AI's voice, brain, or how it listens? Modify the Python files 
     *   Modify `DEFAULT_RECORDER_CONFIG` to change the Whisper model (`model`), language (`language`), silence thresholds (`silence_limit_seconds`), etc. The default `base.en` model is pre-downloaded during the Docker build.
 *   **Turn Detection Sensitivity (`turndetect.py`):**
     *   Adjust pause duration constants within the `TurnDetector.update_settings` method.
+*   **Apple Silicon (M1/M2/M3) Compatibility:**
+    *   The code automatically detects Apple Silicon Macs and disables pvporcupine wake word detection, which is not compatible with ARM architecture.
+    *   For optimal performance on Apple Silicon, the system leverages PyTorch's MPS (Metal Performance Shaders) backend when available.
+    *   If you encounter architecture-specific issues with other dependencies, consider using Rosetta 2 by running Python with the x86_64 architecture: `arch -x86_64 python server.py`
 *   **SSL/HTTPS (`server.py`):**
     *   Set `USE_SSL = True` and provide paths to your certificate (`SSL_CERT_PATH`) and key (`SSL_KEY_PATH`) files.
     *   **Docker Users:** You'll need to adjust `docker-compose.yml` to map the SSL port (e.g., 443) and potentially mount your certificate files as volumes.
