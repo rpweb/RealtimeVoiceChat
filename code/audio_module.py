@@ -124,7 +124,7 @@ class AudioProcessor:
             self.engine = CoquiEngine(
                 specific_model="Lasinya",
                 local_models_path="./models",
-                voice="reference_audio.wav",
+                voice="reference_audio3.wav",
                 speed=1.1,
                 use_deepspeed=use_deepspeed,
                 thread_count=6 if not IS_APPLE_SILICON else 4,  # Reduced threads for Apple Silicon

@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 # (Load system prompt)
 try:
-    with open("system_prompt.txt", "r", encoding="utf-8") as f:
+    with open("system_prompt_salesman.txt", "r", encoding="utf-8") as f:
         system_prompt = f.read().strip()
     logger.info("🗣️📄 System prompt loaded from file.")
 except FileNotFoundError:
-    logger.warning("🗣️📄 system_prompt.txt not found. Using default system prompt.")
+    logger.warning("🗣️📄 system_prompt_salesman.txt not found. Using default system prompt.")
     system_prompt = "You are a helpful assistant."
 
 
