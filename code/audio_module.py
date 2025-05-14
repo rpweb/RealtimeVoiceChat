@@ -30,14 +30,18 @@ ENGINE_SILENCES = {
     "kokoro":  Silence(comma=0.3, sentence=0.6, default=0.3),
     "orpheus": Silence(comma=0.3, sentence=0.6, default=0.3),
 }
-# Stream chunk sizes influence latency vs. throughput trade-offs
-QUICK_ANSWER_STREAM_CHUNK_SIZE = 8
-FINAL_ANSWER_STREAM_CHUNK_SIZE = 30
 
-# Adjust chunk sizes for Apple Silicon to improve quality
+# Platform-specific stream chunk sizes
 if IS_APPLE_SILICON:
-    QUICK_ANSWER_STREAM_CHUNK_SIZE = 12  # Increased for better quality on Apple Silicon
-    FINAL_ANSWER_STREAM_CHUNK_SIZE = 40  # Increased for better quality on Apple Silicon
+    # Increased chunk sizes for better quality on Apple Silicon
+    QUICK_ANSWER_STREAM_CHUNK_SIZE = 12
+    FINAL_ANSWER_STREAM_CHUNK_SIZE = 40
+    logger.info(f"👄🍎 Using optimized chunk sizes for Apple Silicon: Quick={QUICK_ANSWER_STREAM_CHUNK_SIZE}, Final={FINAL_ANSWER_STREAM_CHUNK_SIZE}")
+else:
+    # Standard chunk sizes for Linux and other platforms
+    QUICK_ANSWER_STREAM_CHUNK_SIZE = 8
+    FINAL_ANSWER_STREAM_CHUNK_SIZE = 30
+    logger.info(f"👄🐧 Using standard chunk sizes for non-Apple platforms: Quick={QUICK_ANSWER_STREAM_CHUNK_SIZE}, Final={FINAL_ANSWER_STREAM_CHUNK_SIZE}")
 
 # Coqui model download helper functions
 def create_directory(path: str) -> None:
@@ -116,10 +120,15 @@ class AudioProcessor:
         if engine == "coqui":
             ensure_lasinya_models(models_root="models", model_name="Lasinya")
             
-            # Disable DeepSpeed on Apple Silicon as it's not supported
-            use_deepspeed = not IS_APPLE_SILICON
+            # Configure DeepSpeed and thread settings based on platform
             if IS_APPLE_SILICON:
                 logger.info("👄🍎 Apple Silicon detected - Optimizing Coqui TTS for MPS backend")
+                use_deepspeed = False
+                thread_count = 4
+            else:
+                logger.info("👄🐧 Non-Apple Silicon platform detected - Using standard DeepSpeed and thread settings")
+                use_deepspeed = True
+                thread_count = 6
                 
             self.engine = CoquiEngine(
                 specific_model="Lasinya",
@@ -127,7 +136,7 @@ class AudioProcessor:
                 voice="reference_audio3.wav",
                 speed=1.1,
                 use_deepspeed=use_deepspeed,
-                thread_count=6 if not IS_APPLE_SILICON else 4,  # Reduced threads for Apple Silicon
+                thread_count=thread_count,
                 stream_chunk_size=self.current_stream_chunk_size,
                 overlap_wav_len=1024,
                 load_balancing=True,

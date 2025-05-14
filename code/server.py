@@ -41,11 +41,12 @@ if IS_APPLE_SILICON:
     logger.info(f"🖥️🍎 {Colors.apply('Apple Silicon detected').yellow} - Using Coqui TTS engine with optimized settings")
 else:
     # Use defaults on other platforms
-    TTS_START_ENGINE = "orpheus"
-    TTS_START_ENGINE = "kokoro"
+    # TTS_START_ENGINE = "orpheus"
+    # TTS_START_ENGINE = "kokoro"
     TTS_START_ENGINE = "coqui"
+    logger.info(f"🖥️🐧 {Colors.apply('Non-Apple Silicon platform detected').green} - Using standard TTS engine settings")
 
-TTS_ORPHEUS_MODEL = "Orpheus_3B-1BaseGGUF/mOrpheus_3B-1Base_Q4_K_M.gguf"
+# Set the Orpheus model path
 TTS_ORPHEUS_MODEL = "orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf"
 
 LLM_START_PROVIDER = "ollama"

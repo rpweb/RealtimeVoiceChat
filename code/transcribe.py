@@ -49,7 +49,6 @@ DEFAULT_RECORDER_CONFIG: Dict[str, Any] = {
     "beam_size": 3,
     "beam_size_realtime": 3,
     "no_log_file": True,
-    # Only include wake word settings if not on Apple Silicon
     "allowed_latency_limit": 500,
     # Callbacks will be added dynamically in _create_recorder
     "debug_mode": True,
@@ -61,6 +60,8 @@ DEFAULT_RECORDER_CONFIG: Dict[str, Any] = {
 if not IS_APPLE_SILICON:
     DEFAULT_RECORDER_CONFIG["wake_words"] = "jarvis"
     DEFAULT_RECORDER_CONFIG["wakeword_backend"] = "pvporcupine"
+    DEFAULT_RECORDER_CONFIG["use_wake_words"] = False  # Disable by default, regardless of platform
+    logger.info(f"👂🐧 {Colors.apply('Non-Apple Silicon platform detected').green} - Wake word detection available but disabled by default")
 else:
     logger.info(f"👂🍎 {Colors.apply('Apple Silicon detected').yellow} - Disabling wake word detection completely")
     # No wake word settings for Apple Silicon
