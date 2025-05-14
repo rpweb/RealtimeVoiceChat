@@ -60,7 +60,6 @@ DEFAULT_RECORDER_CONFIG: Dict[str, Any] = {
 if not IS_APPLE_SILICON:
     DEFAULT_RECORDER_CONFIG["wake_words"] = "jarvis"
     DEFAULT_RECORDER_CONFIG["wakeword_backend"] = "pvporcupine"
-    DEFAULT_RECORDER_CONFIG["use_wake_words"] = False  # Disable by default, regardless of platform
     logger.info(f"👂🐧 {Colors.apply('Non-Apple Silicon platform detected').green} - Wake word detection available but disabled by default")
 else:
     logger.info(f"👂🍎 {Colors.apply('Apple Silicon detected').yellow} - Disabling wake word detection completely")
@@ -744,6 +743,11 @@ class TranscriptionProcessor:
         # --- Prepare Recorder Configuration ---
         # Start with the instance's config (either default or user-provided)
         active_config = self.recorder_config.copy()
+        
+        # Remove 'use_wake_words' if it exists as it's not a valid constructor parameter
+        if 'use_wake_words' in active_config:
+            use_wake_words = active_config.pop('use_wake_words')
+            logger.info(f"👂⚙️ Removed 'use_wake_words' parameter (value: {use_wake_words}) from constructor config")
 
         # Add dynamically assigned callbacks using the CORRECT keys for AudioToTextRecorder
         active_config["on_realtime_transcription_update"] = on_partial
@@ -779,8 +783,11 @@ class TranscriptionProcessor:
             else:
                 # Instantiate the LOCAL recorder with the corrected active_config
                 self.recorder = AudioToTextRecorder(**active_config)
-                # Use _set_recorder_param to set parameters after initialization if needed
-                # For example, if we need to set parameters that aren't constructor arguments
+                
+                # Set wake word usage after instantiation if needed
+                if not IS_APPLE_SILICON:
+                    self._set_recorder_param("use_wake_words", False)
+                    logger.info(f"👂⚙️ Wake word detection explicitly disabled after initialization")
 
             logger.info(f"👂✅ {recorder_type} instance created successfully.")
 
