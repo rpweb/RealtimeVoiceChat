@@ -14,8 +14,33 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
       
+      # Free up disk space
+      - name: Free up disk space
+        run: |
+          echo "Listing top 20 largest packages before cleanup"
+          sudo du -ha /usr/share | sort -rh | head -20
+          
+          echo "Removing unnecessary packages and cache"
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          
+          echo "Removing Docker images not needed for this build"
+          docker rmi $(docker images -aq) || true
+          
+          echo "Clearing Docker temporary build files"
+          docker builder prune -af
+          
+          echo "Current disk space"
+          df -h
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
       
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -33,4 +58,9 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }}
           cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache,mode=max
-          platforms: linux/amd64 
+          platforms: linux/amd64
+          # Add build arguments to improve caching and reduce size
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          # Enable GitHub Actions advanced support for larger builds
+          github-token: ${{ secrets.GITHUB_TOKEN }} 
