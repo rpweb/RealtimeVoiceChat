@@ -48,6 +48,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
+      # Set up Docker layer caching
+      - name: Set up Docker layer caching
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
@@ -56,11 +65,21 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache,mode=max
+          cache-from: |
+            type=local,src=/tmp/.buildx-cache
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache
+          cache-to: |
+            type=local,dest=/tmp/.buildx-cache-new,mode=max
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache,mode=max
           platforms: linux/amd64
           # Add build arguments to improve caching and reduce size
           build-args: |
             BUILDKIT_INLINE_CACHE=1
           # Enable GitHub Actions advanced support for larger builds
-          github-token: ${{ secrets.GITHUB_TOKEN }} 
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Move cache to avoid cache growing too large
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache 
