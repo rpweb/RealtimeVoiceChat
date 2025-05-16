@@ -123,8 +123,8 @@ class SpeechPipelineManager:
             self,
             tts_engine: str = "kokoro",
             llm_provider: str = "ollama",
-            # llm_model: str = "hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M",
-            llm_model: str = "gemma2:2b",
+            llm_model: str = "hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M",
+            # llm_model: str = "gemma2:2b",
             no_think: bool = False,
             orpheus_model: str = "orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
         ):
