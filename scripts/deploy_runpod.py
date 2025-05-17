@@ -66,58 +66,6 @@ def get_templates() -> list:
         print(f"Error fetching templates: {e}", file=sys.stderr)
         return []
 
-def get_or_create_network_volume(name: str = "models-volume", size_gb: int = 20) -> Optional[str]:
-    """Get existing network volume or create a new one if it doesn't exist."""
-    query = """
-    query {
-        myself {
-            volumes {
-                id
-                name
-            }
-        }
-    }
-    """
-    
-    try:
-        response = requests.post(
-            "https://api.runpod.io/graphql",
-            json={"query": query},
-            headers={"Authorization": f"Bearer {runpod.api_key}"}
-        ).json()
-        
-        volumes = response.get("data", {}).get("myself", {}).get("volumes", [])
-        for volume in volumes:
-            if volume["name"] == name:
-                print(f"Using existing volume '{name}' with ID: {volume['id']}", file=sys.stderr)
-                return volume["id"]
-        
-        # Create new volume
-        mutation = f"""
-        mutation {{
-            podVolumeSave(input: {{ name: "{name}", sizeGB: {size_gb} }}) {{
-                id
-            }}
-        }}
-        """
-        
-        response = requests.post(
-            "https://api.runpod.io/graphql",
-            json={"query": mutation},
-            headers={"Authorization": f"Bearer {runpod.api_key}"}
-        ).json()
-        
-        volume_id = response.get("data", {}).get("podVolumeSave", {}).get("id")
-        if volume_id:
-            print(f"Created new volume '{name}' with ID: {volume_id}", file=sys.stderr)
-            return volume_id
-        else:
-            print(f"Failed to create volume '{name}': {json.dumps(response, indent=2)}", file=sys.stderr)
-            return None
-    except Exception as e:
-        print(f"Error with network volume: {e}", file=sys.stderr)
-        return None
-
 def create_or_update_template(
     name: str, 
     image_name: str, 
@@ -219,12 +167,9 @@ def main():
         if not all([whisper_image, tts_image, llm_image]):
             raise ValueError("Missing one or more Docker image environment variables")
             
-        # Get or create network volume for model storage - make it optional
-        volume_id = None
-        try:
-            volume_id = get_or_create_network_volume(name="models-volume", size_gb=40)
-        except Exception as e:
-            print(f"Warning: Could not create network volume: {e}. Continuing without volume.", file=sys.stderr)
+        # Use manually provided volume ID
+        volume_id = "ngb3vr286n"  # Fixed volume ID
+        print(f"Using existing volume with ID: {volume_id}", file=sys.stderr)
 
         # Get endpoints
         endpoints = get_endpoints()
