@@ -1,0 +1,15 @@
+# Exclude frontend code
+client-app/
+
+# Exclude RunPod workers
+runpod_workers/
+
+# Exclude docs and other non-essential files
+*.md
+LICENSE
+.github/
+node_modules/
+**/node_modules/
+
+# Exclude other Docker files to avoid confusion
+Dockerfile 

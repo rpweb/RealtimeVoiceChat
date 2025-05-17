@@ -1,254 +1,164 @@
+# RealtimeVoiceChat
 
-# Real-Time AI Voice Chat 🎤💬🧠🔊
+A comprehensive real-time voice chat system with AI, phone call integration, and tool capabilities.
 
-**Have a natural, spoken conversation with an AI!**  
+## Architecture
 
-This project lets you chat with a Large Language Model (LLM) using just your voice, receiving spoken responses in near real-time. Think of it as your own digital conversation partner.
+This project uses a modern distributed architecture with three main components:
 
-https://github.com/user-attachments/assets/16cc29a7-bec2-4dd0-a056-d213db798d8f
+1. **Vercel Next.js Frontend**
+   - Simple, responsive web interface
+   - Vercel AI SDK for streaming responses
+   - Socket.IO for real-time updates
+   - Supports both text and voice input/output
 
-*(early preview - first reasonably stable version)*
+2. **Railway Node.js Backend**
+   - Handles session management
+   - Orchestrates tool usage
+   - Integrates with Twilio for phone calls
+   - Socket.IO server for real-time communication
+   - Provides RunPod endpoints configuration
+   - Securely proxies ML model API calls
 
-## What's Under the Hood?
+3. **RunPod ML Workers**
+   - Whisper Worker: Speech-to-text using Faster Whisper
+   - LLM Worker: Language model inference using vLLM
+   - TTS Worker: Text-to-speech using Piper TTS
 
-A sophisticated client-server system built for low-latency interaction:
+## Features
 
-1.  🎙️ **Capture:** Your voice is captured by your browser.
-2.  ➡️ **Stream:** Audio chunks are whisked away via WebSockets to a Python backend.
-3.  ✍️ **Transcribe:** `RealtimeSTT` rapidly converts your speech to text.
-4.  🤔 **Think:** The text is sent to an LLM (like Ollama or OpenAI) for processing.
-5.  🗣️ **Synthesize:** The AI's text response is turned back into speech using `RealtimeTTS`.
-6.  ⬅️ **Return:** The generated audio is streamed back to your browser for playback.
-7.  🔄 **Interrupt:** Jump in anytime! The system handles interruptions gracefully.
+- **Multi-modal Interaction**: Chat with the AI via text, voice, or phone call
+- **Real-time Streaming**: Get responses as they're generated
+- **Tool Framework**: Extend functionality with custom tools
+- **Session Management**: Support multiple users and conversations
+- **Phone Integration**: Call the AI using regular phone calls via Twilio
+- **Cost-effective**: Uses open-source ML models on RunPod serverless
+- **Dynamic ML Endpoints**: Auto-fetches RunPod endpoints configuration
+- **Secure Design**: RunPod API keys are never exposed to the client
+- **Automated Deployment**: CI/CD for both Railway backend and RunPod workers
 
-## Key Features ✨
+## Quick Start
 
-*   **Fluid Conversation:** Speak and listen, just like a real chat.
-*   **Real-Time Feedback:** See partial transcriptions and AI responses as they happen.
-*   **Low Latency Focus:** Optimized architecture using audio chunk streaming.
-*   **Smart Turn-Taking:** Dynamic silence detection (`turndetect.py`) adapts to the conversation pace.
-*   **Flexible AI Brains:** Pluggable LLM backends (Ollama default, OpenAI support via `llm_module.py`).
-*   **Customizable Voices:** Choose from different Text-to-Speech engines (Kokoro, Coqui, Orpheus via `audio_module.py`).
-*   **Web Interface:** Clean and simple UI using Vanilla JS and the Web Audio API.
-*   **Dockerized Deployment:** Recommended setup using Docker Compose for easier dependency management.
+### Prerequisites
 
-## Technology Stack 🛠️
+- Node.js 18 or higher
+- pnpm 8 or higher
 
-*   **Backend:** Python 3.x, FastAPI
-*   **Frontend:** HTML, CSS, JavaScript (Vanilla JS, Web Audio API, AudioWorklets)
-*   **Communication:** WebSockets
-*   **Containerization:** Docker, Docker Compose
-*   **Core AI/ML Libraries:**
-    *   `RealtimeSTT` (Speech-to-Text)
-    *   `RealtimeTTS` (Text-to-Speech)
-    *   `transformers` (Turn detection, Tokenization)
-    *   `torch` / `torchaudio` (ML Framework)
-    *   `ollama` / `openai` (LLM Clients)
-*   **Audio Processing:** `numpy`, `scipy`
+### Setup
 
-## Before You Dive In: Prerequisites 🏊‍♀️
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/RealtimeVoiceChat.git
+   cd RealtimeVoiceChat
+   ```
 
-This project leverages powerful AI models, which have some requirements:
+2. Run the initialization script:
+   ```bash
+   ./init.sh
+   ```
 
-*   **Operating System:**
-    *   **Docker:** Linux is recommended for the best GPU integration with Docker.
-    *   **Manual:** The provided script (`install.bat`) is for Windows. Manual steps are possible on Linux/macOS but may require more troubleshooting (especially for DeepSpeed).
-*   **🐍 Python:** 3.9 or higher (if setting up manually).
-*   **🚀 GPU:** **A powerful CUDA-enabled NVIDIA GPU is *highly recommended***, especially for faster STT (Whisper) and TTS (Coqui). Performance on CPU-only or weaker GPUs will be significantly slower.
-    *   The setup assumes **CUDA 12.1**. Adjust PyTorch installation if you have a different CUDA version.
-    *   **Docker (Linux):** Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
-*   **🐳 Docker (Optional but Recommended):** Docker Engine and Docker Compose v2+ for the containerized setup.
-*   **🧠 Ollama (Optional):** If using the Ollama backend *without* Docker, install it separately and pull your desired models. The Docker setup includes an Ollama service.
-*   **🔑 OpenAI API Key (Optional):** If using the OpenAI backend, set the `OPENAI_API_KEY` environment variable (e.g., in a `.env` file or passed to Docker).
+3. Start the development servers:
+   ```bash
+   pnpm dev
+   ```
 
----
+4. Open [http://localhost:3000](http://localhost:3000) to access the client app
 
-## Getting Started: Installation & Setup ⚙️
+## Development with pnpm Workspaces
 
-**Clone the repository first:**
+This project uses pnpm workspaces to manage multiple packages:
 
 ```bash
-git clone https://github.com/KoljaB/RealtimeVoiceChat.git
-cd RealtimeVoiceChat
+# Install all dependencies
+pnpm install
+
+# Run only the client
+pnpm dev:client
+
+# Run only the server
+pnpm dev:server
+
+# Run both client and server
+pnpm dev
+
+# Build all packages
+pnpm build
+
+# Build specific packages
+pnpm build:client
+pnpm build:server
 ```
 
-Now, choose your adventure:
+## Deployment
 
-<details>
-<summary><strong>🚀 Option A: Docker Installation (Recommended for Linux/GPU)</strong></summary>
+### RunPod Workers
 
-This is the most straightforward method, bundling the application, dependencies, and even Ollama into manageable containers.
+The ML workers are deployed automatically to RunPod Serverless via GitHub Actions:
 
-1.  **Build the Docker images:**
-    *(This takes time! It downloads base images, installs Python/ML dependencies, and pre-downloads the default STT model.)*
-    ```bash
-    docker compose build
-    ```
-    *(If you want to customize models/settings in `code/*.py`, do it **before** this step!)*
+1. Build Docker images for each worker
+2. Push to Docker Hub
+3. Deploy to RunPod Serverless
 
-2.  **Start the services (App & Ollama):**
-    *(Runs containers in the background. GPU access is configured in `docker-compose.yml`.)*
-    ```bash
-    docker compose up -d
-    ```
-    Give them a minute to initialize.
+### Railway Backend (Automated)
 
-3.  **(Crucial!) Pull your desired Ollama Model:**
-    *(This is done *after* startup to keep the main app image smaller and allow model changes without rebuilding. Execute this command to pull the default model into the running Ollama container.)*
-    ```bash
-    # Pull the default model (adjust if you configured a different one in server.py)
-    docker compose exec ollama ollama pull hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M
+The backend server is deployed automatically to Railway via GitHub Actions:
 
-    # (Optional) Verify the model is available
-    docker compose exec ollama ollama list
-    ```
+1. Set up a Railway project and get an API token
+2. Add the token as a GitHub secret: `RAILWAY_TOKEN`
+3. Push to the main branch to trigger deployment
+4. The workflow uses the `railway.Dockerfile` and `railway.toml` configuration
 
-4.  **Stopping the Services:**
-    ```bash
-    docker compose down
-    ```
+Manual deployment is also possible:
+```bash
+railway login
+railway link # Link to your project
+railway up   # Deploy the project
+```
 
-5.  **Restarting:**
-    ```bash
-    docker compose up -d
-    ```
+### Vercel Frontend
 
-6.  **Viewing Logs / Debugging:**
-    *   Follow app logs: `docker compose logs -f app`
-    *   Follow Ollama logs: `docker compose logs -f ollama`
-    *   Save logs to file: `docker compose logs app > app_logs.txt`
+The client application is deployed on Vercel:
 
-</details>
+1. Push to the Vercel GitHub integration
+2. Set environment variables in Vercel dashboard
+3. Deploy
 
-<details>
-<summary><strong>🛠️ Option B: Manual Installation (Windows Script / venv)</strong></summary>
+#### Automatic Backend URL Configuration
 
-This method requires managing the Python environment yourself. It offers more direct control but can be trickier, especially regarding ML dependencies.
+To automatically make your Railway backend URL available to your Vercel frontend:
 
-**B1) Using the Windows Install Script:**
+1. In your Railway project, go to Settings > Integrations
+2. Add the Vercel integration and connect to your Vercel account
+3. Select your Vercel project (the client app)
+4. Railway will automatically export your backend URL as an environment variable
+5. In your Vercel project settings, map the Railway variable to `NEXT_PUBLIC_BACKEND_URL`
 
-1.  Ensure you meet the prerequisites (Python, potentially CUDA drivers).
-2.  Run the script. It attempts to create a venv, install PyTorch for CUDA 12.1, a compatible DeepSpeed wheel, and other requirements.
-    ```batch
-    install.bat
-    ```
-    *(This opens a new command prompt within the activated virtual environment.)*
-    Proceed to the **"Running the Application"** section.
+This eliminates the need to manually configure the backend URL in Vercel.
 
-**B2) Manual Steps (Linux/macOS/Windows):**
+## Configuration
 
-1.  **Create & Activate Virtual Environment:**
-    ```bash
-    python -m venv venv
-    # Linux/macOS:
-    source venv/bin/activate
-    # Windows:
-    .\venv\Scripts\activate
-    ```
+### Environment Variables
 
-2.  **Upgrade Pip:**
-    ```bash
-    python -m pip install --upgrade pip
-    ```
+**Vercel Frontend**:
+- `NEXT_PUBLIC_BACKEND_URL`: URL of the Railway backend server
 
-3.  **Navigate to Code Directory:**
-    ```bash
-    cd code
-    ```
+**Railway Backend**:
+- `RUNPOD_API_KEY`: RunPod API key (securely stored on the server only)
+- `CLIENT_ORIGIN`: URL of your Vercel app (for CORS)
+- `TWILIO_ACCOUNT_SID`: Twilio account SID
+- `TWILIO_AUTH_TOKEN`: Twilio auth token
+- `TWILIO_PHONE_NUMBER`: Twilio phone number
 
-4.  **Install PyTorch (Crucial Step - Match Your Hardware!):**
-    *   **With NVIDIA GPU (CUDA 12.1 Example):**
-        ```bash
-        # Verify your CUDA version! Adjust 'cu121' and the URL if needed.
-        pip install torch==2.5.1+cu121 torchaudio==2.5.1+cu121 torchvision --index-url https://download.pytorch.org/whl/cu121
-        ```
-    *   **CPU Only (Expect Slow Performance):**
-        ```bash
-        # pip install torch torchaudio torchvision
-        ```
-    *   *Find other PyTorch versions:* [https://pytorch.org/get-started/previous-versions/](https://pytorch.org/get-started/previous-versions/)
+### GitHub Secrets for CI/CD
 
-5.  **Install Other Requirements:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *   **Note on DeepSpeed:** The `requirements.txt` may include DeepSpeed. Installation can be complex, especially on Windows. The `install.bat` tries a precompiled wheel. If manual installation fails, you might need to build it from source or consult resources like [deepspeedpatcher](https://github.com/erew123/deepspeedpatcher) (use at your own risk). Coqui TTS performance benefits most from DeepSpeed.
+- `RAILWAY_TOKEN`: Railway API token for automated deployment
+- `RUNPOD_API_KEY`: RunPod API key for deploying serverless workers
+- `DOCKERHUB_USERNAME`: Docker Hub username for pushing images
+- `DOCKERHUB_TOKEN`: Docker Hub token for authentication
 
-</details>
+## Development
 
----
-
-## Running the Application ▶️
-
-**If using Docker:**
-Your application is already running via `docker compose up -d`! Check logs using `docker compose logs -f app`.
-
-**If using Manual/Script Installation:**
-
-1.  **Activate your virtual environment** (if not already active):
-    ```bash
-    # Linux/macOS: source ../venv/bin/activate
-    # Windows: ..\venv\Scripts\activate
-    ```
-2.  **Navigate to the `code` directory** (if not already there):
-    ```bash
-    cd code
-    ```
-3.  **Start the FastAPI server:**
-    ```bash
-    python server.py
-    ```
-
-**Accessing the Client (Both Methods):**
-
-1.  Open your web browser to `http://localhost:8000` (or your server's IP if running remotely/in Docker on another machine).
-2.  **Grant microphone permissions** when prompted.
-3.  Click **"Start"** to begin chatting! Use "Stop" to end and "Reset" to clear the conversation.
-
----
-
-## Configuration Deep Dive 🔧
-
-Want to tweak the AI's voice, brain, or how it listens? Modify the Python files in the `code/` directory.
-
-**⚠️ Important Docker Note:** If using Docker, make any configuration changes *before* running `docker compose build` to ensure they are included in the image.
-
-*   **TTS Engine & Voice (`server.py`, `audio_module.py`):**
-    *   Change `START_ENGINE` in `server.py` to `"coqui"`, `"kokoro"`, or `"orpheus"`.
-    *   Adjust engine-specific settings (e.g., voice model path for Coqui, speaker ID for Orpheus, speed) within `AudioProcessor.__init__` in `audio_module.py`.
-*   **LLM Backend & Model (`server.py`, `llm_module.py`):**
-    *   Set `LLM_START_PROVIDER` (`"ollama"` or `"openai"`) and `LLM_START_MODEL` (e.g., `"hf.co/..."` for Ollama, model name for OpenAI) in `server.py`. Remember to pull the Ollama model if using Docker (see Installation Step A3).
-    *   Customize the AI's personality by editing `system_prompt.txt`.
-*   **STT Settings (`transcribe.py`):**
-    *   Modify `DEFAULT_RECORDER_CONFIG` to change the Whisper model (`model`), language (`language`), silence thresholds (`silence_limit_seconds`), etc. The default `base.en` model is pre-downloaded during the Docker build.
-*   **Turn Detection Sensitivity (`turndetect.py`):**
-    *   Adjust pause duration constants within the `TurnDetector.update_settings` method.
-*   **Apple Silicon (M1/M2/M3) Compatibility:**
-    *   The code automatically detects Apple Silicon Macs and disables pvporcupine wake word detection, which is not compatible with ARM architecture.
-    *   For optimal performance on Apple Silicon, the system leverages PyTorch's MPS (Metal Performance Shaders) backend when available.
-    *   If you encounter architecture-specific issues with other dependencies, consider using Rosetta 2 by running Python with the x86_64 architecture: `arch -x86_64 python server.py`
-*   **SSL/HTTPS (`server.py`):**
-    *   Set `USE_SSL = True` and provide paths to your certificate (`SSL_CERT_PATH`) and key (`SSL_KEY_PATH`) files.
-    *   **Docker Users:** You'll need to adjust `docker-compose.yml` to map the SSL port (e.g., 443) and potentially mount your certificate files as volumes.
-    <details>
-    <summary><strong>Generating Local SSL Certificates (Windows Example w/ mkcert)</strong></summary>
-
-    1.  Install Chocolatey package manager if you haven't already.
-    2.  Install mkcert: `choco install mkcert`
-    3.  Run Command Prompt *as Administrator*.
-    4.  Install a local Certificate Authority: `mkcert -install`
-    5.  Generate certs (replace `your.local.ip`): `mkcert localhost 127.0.0.1 ::1 your.local.ip`
-        *   This creates `.pem` files (e.g., `localhost+3.pem` and `localhost+3-key.pem`) in the current directory. Update `SSL_CERT_PATH` and `SSL_KEY_PATH` in `server.py` accordingly. Remember to potentially mount these into your Docker container.
-    </details>
-
----
-
-## Contributing 🤝
-
-Got ideas or found a bug? Contributions are welcome! Feel free to open issues or submit pull requests.
-
-## License 📜
-
-The core codebase of this project is released under the **MIT License** (see the [LICENSE](./LICENSE) file for details).
-
-This project relies on external specific TTS engines (like `Coqui XTTSv2`) and LLM providers which have their **own licensing terms**. Please ensure you comply with the licenses of all components you use.
+This project uses pnpm as the package manager. See individual README files in each component directory:
+- [Client App](./client-app/README.md)
+- [Server](./server/README.md)
+- [RunPod Workers](./runpod_workers/README.md)

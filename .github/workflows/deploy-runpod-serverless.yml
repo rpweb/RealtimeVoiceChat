@@ -1,0 +1,189 @@
+name: Deploy to RunPod Serverless
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'runpod_workers/**'
+      - '.github/workflows/deploy-runpod-serverless.yml'
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  deploy-to-runpod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install RunPod CLI and dependencies
+        run: |
+          pip install runpod requests
+
+      - name: Deploy Whisper Worker and Get Endpoint
+        id: deploy-whisper
+        run: |
+          # Get the Docker image name from the build workflow
+          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-whisper:latest"
+          
+          # Deploy to RunPod Serverless
+          ENDPOINT_RESPONSE=$(python -c "
+          import runpod
+          import json
+          import os
+
+          # Initialize RunPod with API key
+          runpod.api_key = '${{ secrets.RUNPOD_API_KEY }}'
+
+          # Check if endpoint already exists
+          endpoints = runpod.get_endpoints()
+          whisper_endpoint_id = None
+
+          for endpoint in endpoints:
+              if endpoint.get('name') == 'whisper-worker':
+                  whisper_endpoint_id = endpoint.get('id')
+                  break
+
+          if whisper_endpoint_id:
+              # Update existing endpoint
+              response = runpod.update_endpoint(
+                  endpoint_id=whisper_endpoint_id,
+                  image='$DOCKER_IMAGE',
+                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
+                  name='whisper-worker',
+                  active=True
+              )
+          else:
+              # Create new endpoint
+              response = runpod.create_endpoint(
+                  name='whisper-worker',
+                  image='$DOCKER_IMAGE',
+                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
+              )
+          
+          print(json.dumps(response))
+          ")
+          
+          # Extract endpoint ID and save it
+          WHISPER_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
+          echo "Whisper endpoint deployed: $WHISPER_ENDPOINT_ID"
+
+      - name: Deploy LLM Worker and Get Endpoint
+        id: deploy-llm
+        run: |
+          # Get the Docker image name from the build workflow
+          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-llm:latest"
+          
+          # Deploy to RunPod Serverless
+          ENDPOINT_RESPONSE=$(python -c "
+          import runpod
+          import json
+          import os
+
+          # Initialize RunPod with API key
+          runpod.api_key = '${{ secrets.RUNPOD_API_KEY }}'
+
+          # Check if endpoint already exists
+          endpoints = runpod.get_endpoints()
+          llm_endpoint_id = None
+
+          for endpoint in endpoints:
+              if endpoint.get('name') == 'llm-worker':
+                  llm_endpoint_id = endpoint.get('id')
+                  break
+
+          if llm_endpoint_id:
+              # Update existing endpoint
+              response = runpod.update_endpoint(
+                  endpoint_id=llm_endpoint_id,
+                  image='$DOCKER_IMAGE',
+                  gpu_ids=['NVIDIA RTX A6000'],  # Adjust based on your needs
+                  name='llm-worker',
+                  active=True
+              )
+          else:
+              # Create new endpoint
+              response = runpod.create_endpoint(
+                  name='llm-worker',
+                  image='$DOCKER_IMAGE',
+                  gpu_ids=['NVIDIA RTX A6000'],  # Adjust based on your needs
+              )
+          
+          print(json.dumps(response))
+          ")
+          
+          # Extract endpoint ID and save it
+          LLM_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
+          echo "LLM endpoint deployed: $LLM_ENDPOINT_ID"
+
+      - name: Deploy TTS Worker and Get Endpoint
+        id: deploy-tts
+        run: |
+          # Get the Docker image name from the build workflow
+          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-tts:latest"
+          
+          # Deploy to RunPod Serverless
+          ENDPOINT_RESPONSE=$(python -c "
+          import runpod
+          import json
+          import os
+
+          # Initialize RunPod with API key
+          runpod.api_key = '${{ secrets.RUNPOD_API_KEY }}'
+
+          # Check if endpoint already exists
+          endpoints = runpod.get_endpoints()
+          tts_endpoint_id = None
+
+          for endpoint in endpoints:
+              if endpoint.get('name') == 'tts-worker':
+                  tts_endpoint_id = endpoint.get('id')
+                  break
+
+          if tts_endpoint_id:
+              # Update existing endpoint
+              response = runpod.update_endpoint(
+                  endpoint_id=tts_endpoint_id,
+                  image='$DOCKER_IMAGE',
+                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
+                  name='tts-worker',
+                  active=True
+              )
+          else:
+              # Create new endpoint
+              response = runpod.create_endpoint(
+                  name='tts-worker',
+                  image='$DOCKER_IMAGE',
+                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
+              )
+          
+          print(json.dumps(response))
+          ")
+          
+          # Extract endpoint ID and save it
+          TTS_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
+          echo "TTS endpoint deployed: $TTS_ENDPOINT_ID"
+
+      - name: Summary
+        run: |
+          echo "✅ Deployment Summary:"
+          echo "All RunPod Serverless endpoints have been deployed successfully."
+          echo "Your Next.js application will automatically fetch the latest endpoint IDs at runtime."
+          echo ""
+          echo "⚠️ Important:"
+          echo "1. Make sure to set RUNPOD_API_KEY in your Vercel environment variables"
+          echo "2. Make sure to set NEXT_PUBLIC_RUNPOD_API_KEY for client-side API access"
+
+      # Optional: Deploy the client app to Vercel
+      # - name: Deploy to Vercel
+      #   uses: amondnet/vercel-action@v20
+      #   with:
+      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+      #     working-directory: client-app 

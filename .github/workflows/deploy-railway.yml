@@ -1,0 +1,45 @@
+name: Deploy Server to Railway
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'server/**'
+      - 'railway.Dockerfile'
+      - 'railway.toml'
+      - '.github/workflows/deploy-railway.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          
+      - name: Summary
+        run: |
+          echo "✅ Deployment Summary:"
+          echo "Backend server has been deployed to Railway successfully."
+          echo ""
+          echo "⚠️ Important:"
+          echo "1. Make sure to set the following environment variables in your Railway project:"
+          echo "   - RUNPOD_API_KEY: Your RunPod API key"
+          echo "   - CLIENT_ORIGIN: Your Vercel frontend URL (for CORS)"
+          echo "   - Other environment variables as needed (Twilio, etc.)"
+          echo ""
+          echo "2. Update your Vercel frontend with the Railway URL:"
+          echo "   - Set NEXT_PUBLIC_BACKEND_URL to your Railway project URL" 

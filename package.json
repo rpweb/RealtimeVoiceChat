@@ -1,0 +1,29 @@
+{
+  "name": "realtime-voice-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time voice chat system with AI integration",
+  "scripts": {
+    "dev:client": "pnpm --filter client-app dev",
+    "dev:server": "pnpm --filter server dev",
+    "dev": "pnpm run dev:server & pnpm run dev:client",
+    "build:client": "pnpm --filter client-app build",
+    "build:server": "pnpm --filter server build",
+    "build": "pnpm run build:server && pnpm run build:client",
+    "start:client": "pnpm --filter client-app start",
+    "start:server": "pnpm --filter server start",
+    "start": "pnpm run start:server & pnpm run start:client"
+  },
+  "keywords": [
+    "voice",
+    "chat",
+    "AI",
+    "twilio",
+    "runpod"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@10.8.1"
+} 

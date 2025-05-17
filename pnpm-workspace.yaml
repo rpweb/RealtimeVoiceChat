@@ -1,0 +1,4 @@
+packages:
+  - 'client-app'
+  - 'server'
+  - 'runpod_workers/*' 
