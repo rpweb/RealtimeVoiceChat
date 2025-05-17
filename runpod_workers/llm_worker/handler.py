@@ -14,13 +14,18 @@ def handler(job):
     """
     Handle the serverless request
     """
+    print(f"[DEBUG] Received job: {job}")
+    
     job_input = job["input"]
     
     start_time = time.time()
     
     try:
+        print(f"[DEBUG] Processing job input: {job_input}")
+        
         prompt = job_input.get("prompt", "")
         if not prompt:
+            print("[DEBUG] No prompt provided")
             return {"error": "No prompt provided. Please include a 'prompt' field."}
         
         # Get parameters for the LLM

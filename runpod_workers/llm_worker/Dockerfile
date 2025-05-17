@@ -1,7 +1,8 @@
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-# Set environment variables!
+# Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -9,19 +10,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-dev \
     build-essential \
+    wget \
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Create symbolic link for python
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 # Set working directory
 WORKDIR /app
 
-# Install PyTorch and other dependencies
-RUN pip install --no-cache-dir torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch directly
+RUN pip install --no-cache-dir torch==2.1.2 --index-url https://download.pytorch.org/whl/cu121
 
-# Install Python dependencies
+# Install Python dependencies with explicit vLLM version
 COPY requirements.txt .
-RUN pip install --no-cache-dir --no-deps vllm==0.3.2 && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY handler.py predict.py /app/
@@ -30,5 +35,5 @@ COPY schema.py /app/
 # Expose port for API
 EXPOSE 8000
 
-# Start the service
+# Start the service with environment set to print everything immediately
 CMD ["python", "-m", "runpod.serverless.start"] 
