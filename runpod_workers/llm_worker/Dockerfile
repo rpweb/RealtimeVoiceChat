@@ -20,7 +20,8 @@ RUN pip install --no-cache-dir torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --no-deps vllm==0.3.2 && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY handler.py predict.py /app/
