@@ -60,9 +60,24 @@ jobs:
           # Initialize RunPod with API key
           runpod.api_key = os.environ["RUNPOD_API_KEY"]
           
-          # Check existing endpoints and templates
+          # Check existing endpoints
           endpoints = runpod.get_endpoints()
-          templates = runpod.get_templates()
+          
+          # Get templates using GraphQL query
+          templates_query = """
+          query {
+            myself {
+              templates {
+                id
+                name
+                imageName
+                isServerless
+              }
+            }
+          }
+          """
+          templates_response = runpod.query(templates_query)
+          templates = templates_response.get("data", {}).get("myself", {}).get("templates", [])
           
           endpoint_ids = {
               "whisper": None,
