@@ -329,7 +329,7 @@ def main():
                     )
                 else:
                     print(f"Creating new endpoint '{worker_name}' with template ID: {template_id}", file=sys.stderr)
-                    gpu_type = "RTX A4500"
+                    gpu_type = "RTX 4090"
                     if worker == "tts":
                         gpu_type = "CPU"
                     responses[worker] = runpod.create_endpoint(
