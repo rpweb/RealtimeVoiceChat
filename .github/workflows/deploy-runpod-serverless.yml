@@ -104,7 +104,8 @@ jobs:
               responses["whisper"] = runpod.create_endpoint(
                   name="whisper-worker",
                   template_id=whisper_template["id"],
-                  gpu_ids=["NVIDIA RTX A5000"]
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  workers_max=1
               )
           
           # Update or create TTS endpoint
@@ -131,7 +132,8 @@ jobs:
               responses["tts"] = runpod.create_endpoint(
                   name="tts-worker",
                   template_id=tts_template["id"],
-                  gpu_ids=["NVIDIA RTX A5000"]
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  workers_max=1
               )
           
           # Update or create LLM endpoint
@@ -158,7 +160,8 @@ jobs:
               responses["llm"] = runpod.create_endpoint(
                   name="llm-worker",
                   template_id=llm_template["id"],
-                  gpu_ids=["NVIDIA RTX A5000"]
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  workers_max=1
               )
           
           print(json.dumps(responses))
