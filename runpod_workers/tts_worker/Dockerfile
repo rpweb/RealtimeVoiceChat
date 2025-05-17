@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
+# Install RunPod first and verify installation
+RUN pip install --no-cache-dir runpod==1.6.0 && \
+    python -c "import runpod; print(f'RunPod version: {runpod.__version__}')"
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -28,11 +32,16 @@ RUN mkdir -p /app/models && \
     wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json -O en_US-lessac-medium.onnx.json
 
 # Copy application files
-COPY handler.py predict.py /app/
-COPY schema.py /app/
+COPY handler.py predict.py schema.py start.py /app/
+
+# Make start script executable
+RUN chmod +x /app/start.py
 
 # Expose port for API
 EXPOSE 8000
 
-# Start the service
-CMD ["python", "-m", "runpod.serverless.start"] 
+# Set environment variable to force module path recognition
+ENV PYTHONPATH=/app
+
+# Use our custom start script
+CMD ["python", "/app/start.py"] 
