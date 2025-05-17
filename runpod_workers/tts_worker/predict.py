@@ -17,12 +17,11 @@ class TTSProcessor:
         
         # Load available models
         self.available_voices = {
-            "jenny": os.path.join(self.models_dir, "en_US-jenny-medium.onnx"),
             "lessac": os.path.join(self.models_dir, "en_US-lessac-medium.onnx")
         }
         
         # Load default voice
-        self.default_voice = "jenny"
+        self.default_voice = "lessac"
         self.voice_instances = {}
         
         print("TTS processor initialized with Piper TTS")
@@ -56,7 +55,7 @@ class TTSProcessor:
     def synthesize_speech(
         self,
         text: str,
-        voice: str = "jenny",
+        voice: str = "lessac",
         format: str = "mp3",
         speed: float = 1.0,
         response_format: str = "base64"
@@ -66,7 +65,7 @@ class TTSProcessor:
         
         Args:
             text: Text to convert to speech
-            voice: Voice name to use (jenny or lessac)
+            voice: Voice name to use (lessac)
             format: Audio format (mp3 or wav)
             speed: Speed of speech (0.5 to 2.0)
             response_format: How to return the audio (base64 or url)

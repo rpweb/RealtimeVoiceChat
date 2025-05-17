@@ -1,17 +1,19 @@
 name: Deploy to RunPod Serverless
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'runpod_workers/**'
-      - '.github/workflows/deploy-runpod-serverless.yml'
+  workflow_run:
+    workflows: ["Build and Push Whisper Worker", "Build and Push LLM Worker", "Build and Push TTS Worker"]
+    types:
+      - completed
+    branches: [main]
   # Allow manual triggering
   workflow_dispatch:
 
 jobs:
   deploy-to-runpod:
     runs-on: ubuntu-latest
+    # Only run if the triggering workflow was successful (for workflow_run events)
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -176,8 +178,7 @@ jobs:
           echo "Your Next.js application will automatically fetch the latest endpoint IDs at runtime."
           echo ""
           echo "⚠️ Important:"
-          echo "1. Make sure to set RUNPOD_API_KEY in your Vercel environment variables"
-          echo "2. Make sure to set NEXT_PUBLIC_RUNPOD_API_KEY for client-side API access"
+          echo "1. Make sure to set RUNPOD_API_KEY in your backend environment variables"
 
       # Optional: Deploy the client app to Vercel
       # - name: Deploy to Vercel

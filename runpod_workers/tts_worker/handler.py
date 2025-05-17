@@ -24,7 +24,7 @@ def handler(job):
             return {"error": "No text provided. Please include a 'text' field."}
         
         # Get TTS parameters
-        voice = job_input.get("voice", "jenny")  # Default to jenny voice
+        voice = job_input.get("voice", "lessac")  # Default to lessac voice
         speed = job_input.get("speed", 1.0)
         format = job_input.get("format", "mp3")
         response_format = job_input.get("response_format", "base64")  # 'base64' or 'url'

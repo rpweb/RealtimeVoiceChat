@@ -21,13 +21,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download Piper TTS model and voice
+# Download Piper TTS model and voice (only lessac model)
 RUN mkdir -p /app/models && \
     cd /app/models && \
     wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx -O en_US-lessac-medium.onnx && \
-    wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json -O en_US-lessac-medium.onnx.json && \
-    wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/jenny/medium/en_US-jenny-medium.onnx -O en_US-jenny-medium.onnx && \
-    wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/jenny/medium/en_US-jenny-medium.onnx.json -O en_US-jenny-medium.onnx.json
+    wget https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json -O en_US-lessac-medium.onnx.json
 
 # Copy application files
 COPY handler.py predict.py /app/
