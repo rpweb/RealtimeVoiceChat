@@ -56,6 +56,7 @@ jobs:
           import runpod
           import json
           import os
+          import requests
           import time
           
           # Initialize RunPod with API key
