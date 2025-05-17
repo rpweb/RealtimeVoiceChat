@@ -242,7 +242,7 @@ def main():
             raise ValueError("Missing one or more Docker image environment variables")
             
         # Use manually provided volume ID
-        volume_id = "ngb3vr286n"
+        volume_id = "0x80zwh1q1"
         print(f"Using existing volume with ID: {volume_id}", file=sys.stderr)
 
         # Validate volume ID
@@ -329,7 +329,7 @@ def main():
                     )
                 else:
                     print(f"Creating new endpoint '{worker_name}' with template ID: {template_id}", file=sys.stderr)
-                    gpu_type = "NVIDIA A10G"
+                    gpu_type = "RTX A4500"
                     if worker == "tts":
                         gpu_type = "CPU"
                     responses[worker] = runpod.create_endpoint(
