@@ -179,7 +179,6 @@ def main():
         
         for endpoint in endpoints:
             name = endpoint.get("name", "")
-            # More flexible matching to handle any suffixes (-fb, etc.)
             if name.startswith("whisper-worker"):
                 endpoint_ids["whisper"] = endpoint.get("id")
                 print(f"Found whisper endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
@@ -193,20 +192,20 @@ def main():
         # Define environment variables for each worker
         env_vars = {
             "whisper": {
-                "MODEL_PATH": "/workspace/models" if volume_id else "./models",
+                "MODEL_PATH": "/workspace/models",
                 "CUDA_VISIBLE_DEVICES": "0"
             },
             "tts": {
-                "MODEL_PATH": "/workspace/models" if volume_id else "./models",
-                "ADDITIONAL_MODELS_DIR": "/workspace/custom-voices" if volume_id else "./custom-voices",
+                "MODEL_PATH": "/workspace/models",
+                "ADDITIONAL_MODELS_DIR": "/workspace/custom-voices",
                 "DEFAULT_VOICE": "lessac"
             },
             "llm": {
                 "MODEL_ID": "meta-llama/Meta-Llama-3-8B-Instruct",
-                "MODEL_PATH": "/workspace/models" if volume_id else "./models",
+                "MODEL_PATH": "/workspace/models",
                 "GPU_COUNT": "1",
                 "GPU_MEMORY_UTILIZATION": "0.85",
-                "CACHE_DIR": "/workspace/models/cache" if volume_id else "./models/cache",
+                "CACHE_DIR": "/workspace/models/cache",
                 "PRELOAD_MODEL": "true"
             }
         }
@@ -236,9 +235,9 @@ def main():
         # Create or update endpoints
         responses = {}
         worker_names = {
-            "whisper": "whisper-worker-fb",  # Fixed suffix to match existing endpoints
-            "tts": "tts-worker-fb",          # Fixed suffix to match existing endpoints
-            "llm": "llm-worker-fb"           # Fixed suffix to match existing endpoints
+            "whisper": "whisper-worker",  # Clean name without suffix
+            "tts": "tts-worker",          # Clean name without suffix
+            "llm": "llm-worker"           # Clean name without suffix
         }
         
         for worker in ["whisper", "tts", "llm"]:
