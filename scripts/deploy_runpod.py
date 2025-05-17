@@ -13,7 +13,6 @@ def initialize_runpod() -> None:
     if not api_key:
         raise ValueError("RUNPOD_API_KEY environment variable is not set")
     runpod.api_key = api_key
-    # Test API key
     test_query = """query { myself { id } }"""
     try:
         response = requests.post(
@@ -75,26 +74,40 @@ def get_templates() -> list:
         if "errors" in response:
             print(f"GraphQL errors in get_templates: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
         templates = response.get("data", {}).get("myself", {}).get("podTemplates", [])
+        for template in templates:
+            print(f"Template: name={template.get('name')}, id={template.get('id')}, imageName={template.get('imageName')}", file=sys.stderr)
         return templates
     except Exception as e:
         print(f"Error fetching templates: {e}", file=sys.stderr)
         return []
 
 def get_volumes() -> list:
-    """Retrieve all RunPod volumes via GraphQL."""
-    query = """query { myself { volumes { id name } } }"""
-    try:
-        response = requests.post(
-            "https://api.runpod.io/graphql",
-            json={"query": query},
-            headers={"Authorization": f"Bearer {runpod.api_key}"}
-        ).json()
-        if "errors" in response:
-            print(f"GraphQL errors in get_volumes: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
-        return response.get("data", {}).get("myself", {}).get("volumes", [])
-    except Exception as e:
-        print(f"Error fetching volumes: {e}", file=sys.stderr)
-        return []
+    """Retrieve all RunPod network volumes via GraphQL."""
+    query = """query { myself { networkVolumes { id name } } }"""
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                "https://api.runpod.io/graphql",
+                json={"query": query},
+                headers={"Authorization": f"Bearer {runpod.api_key}"}
+            ).json()
+            if "errors" in response:
+                print(f"Attempt {attempt + 1}/3: GraphQL errors in get_volumes: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
+                if attempt < 2:
+                    sleep(5)
+                    continue
+                print("Failed to fetch volumes. Proceeding without validation.", file=sys.stderr)
+                return []
+            volumes = response.get("data", {}).get("myself", {}).get("networkVolumes", [])
+            print(f"Found volumes: {[{v['id']: v['name']} for v in volumes]}", file=sys.stderr)
+            return volumes
+        except Exception as e:
+            print(f"Attempt {attempt + 1}/3: Error fetching volumes: {e}", file=sys.stderr)
+            if attempt < 2:
+                sleep(5)
+                continue
+            print("Failed to fetch volumes. Proceeding without validation.", file=sys.stderr)
+            return []
 
 def create_or_update_template(
     name: str, 
@@ -118,7 +131,6 @@ def create_or_update_template(
                 raise ValueError(f"Template '{name}' has invalid imageName '{current_image}'. Update to '{image_name}' in RunPod console.")
             return template.get("id")
     
-    # Prepare environment variables
     environment = env_vars or {}
     container_disk_in_gb = 5
     volume_mounts = [{"volumeId": volume_id, "mountPath": "/workspace"}] if volume_id else []
@@ -182,17 +194,18 @@ def main():
         whisper_image = os.getenv("WHISPER_IMAGE")
         tts_image = os.getenv("TTS_IMAGE")
         llm_image = os.getenv("LLM_IMAGE")
+        print(f"Docker images: WHISPER_IMAGE={whisper_image}, TTS_IMAGE={tts_image}, LLM_IMAGE={llm_image}", file=sys.stderr)
         if not all([whisper_image, tts_image, llm_image]):
             raise ValueError("Missing one or more Docker image environment variables")
             
         # Use manually provided volume ID
-        volume_id = "ngb3vr286n"  # Fixed volume ID
+        volume_id = "ngb3vr286n"
         print(f"Using existing volume with ID: {volume_id}", file=sys.stderr)
 
         # Validate volume ID
         volumes = get_volumes()
         if not any(v["id"] == volume_id for v in volumes):
-            raise ValueError(f"Volume ID {volume_id} not found. Available volumes: {volumes}")
+            raise ValueError(f"Volume ID {volume_id} not found. Available volumes: {[v['id'] for v in volumes]}")
 
         # Get endpoints
         endpoints = get_endpoints()
@@ -258,13 +271,13 @@ def main():
         # Create or update endpoints
         responses = {}
         worker_names = {
-            "whisper": "whisper-worker",  # Clean name without suffix
-            "tts": "tts-worker",          # Clean name without suffix
-            "llm": "llm-worker"           # Clean name without suffix
+            "whisper": "whisper-worker",
+            "tts": "tts-worker",
+            "llm": "llm-worker"
         }
         
         for worker in ["whisper", "tts", "llm"]:
-            worker_name = worker_names[worker]  # Use the fixed name with suffix
+            worker_name = worker_names[worker]
             template_id = template_ids[worker]
             endpoint_id = endpoint_ids[worker]
             try:
@@ -276,18 +289,17 @@ def main():
                     )
                 else:
                     print(f"Creating new endpoint '{worker_name}' with template ID: {template_id}", file=sys.stderr)
-                    gpu_type = "NVIDIA A10G"  # or "NVIDIA A100" for even better performance
+                    gpu_type = "NVIDIA A10G"
                     if worker == "tts":
-                        # TTS can run on CPU
-                        gpu_type = "CPU" 
+                        gpu_type = "CPU"
                     responses[worker] = runpod.create_endpoint(
-                        name=worker_name,  # Use fixed name
+                        name=worker_name,
                         template_id=template_id,
                         gpu_ids=[gpu_type],
-                        workers_max=1,      # Only 1 worker for testing purposes
-                        workers_min=0,      # No always-on workers (saves money but adds cold start)
-                        idle_timeout=5,     # Scale down after 5 seconds of inactivity (more cost effective)
-                        flashboot=True      # Enable flashboot for faster cold starts (2-3x quicker)
+                        workers_max=1,
+                        workers_min=0,
+                        idle_timeout=5,
+                        flashboot=True
                     )
             except Exception as e:
                 print(f"Error deploying {worker_name}: {e}", file=sys.stderr)
