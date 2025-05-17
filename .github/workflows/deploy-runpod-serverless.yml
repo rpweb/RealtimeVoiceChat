@@ -44,15 +44,15 @@ jobs:
 
           - name: Deploy Endpoints to RunPod
           run: |
-            # Get the Docker image names from the workflow inputs or build workflows
+            # Get Docker image names from workflow inputs or build workflows
             WHISPER_IMAGE="${{ github.event.inputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}"
             TTS_IMAGE="${{ github.event.inputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}"
             LLM_IMAGE="${{ github.event.inputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}"
             
-            # Run the deployment script
+            # Run deployment script
             python3 scripts/deploy_runpod.py > endpoint_response.json
             
-            # Log the output for debugging
+            # Log output for debugging
             echo "endpoint_response.json content:"
             cat endpoint_response.json
             
