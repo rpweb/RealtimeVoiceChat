@@ -98,7 +98,7 @@ jobs:
           templates_response = requests.post(
               "https://api.runpod.io/graphql",
               json={"query": templates_gql},
-              headers={"Authorization": f"Bearer {os.environ['RUNPOD_API_KEY']}"}
+              headers={"Authorization": f"Bearer {runpod.api_key}"}
           ).json()
           
           # Extract templates
