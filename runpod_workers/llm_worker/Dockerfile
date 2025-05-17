@@ -1,6 +1,6 @@
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-# Set environment variables
+# Set environment variables!
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install necessary packages
