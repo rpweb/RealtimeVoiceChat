@@ -8,7 +8,7 @@ from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 
 class LLMGenerator:
-    def __init__(self, model_id: str = "meta-llama/Meta-Llama-3-8B-Instruct"):
+    def __init__(self, model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"):
         """
         Initialize the LLM generator with a specified model
         
@@ -18,11 +18,11 @@ class LLMGenerator:
         self.model_id = model_id
         print(f"Loading model {model_id}...")
         
-        # Initialize vLLM engine
+        # Initialize vLLM engine with optimized settings for smaller models
         self.llm = LLM(
             model=model_id,
             tensor_parallel_size=torch.cuda.device_count(),
-            gpu_memory_utilization=0.9,
+            gpu_memory_utilization=0.7,  # Lower memory usage for smaller models
             trust_remote_code=True
         )
         

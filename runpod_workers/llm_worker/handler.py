@@ -6,7 +6,8 @@ from typing import Dict, Any, List, Optional
 from predict import LLMGenerator
 
 # Initialize the LLM generator with pre-loaded model
-model_id = os.environ.get("MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
+# Using TinyLlama for testing as it's only ~2GB and initializes quickly
+model_id = os.environ.get("MODEL_ID", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
 llm_generator = LLMGenerator(model_id=model_id)
     
 def handler(job):
