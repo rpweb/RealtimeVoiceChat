@@ -14,110 +14,21 @@ on:
     inputs:
       whisper_image:
         description: 'Whisper Docker image to deploy'
-        required: false
+        required: true
         type: string
       tts_image:
         description: 'TTS Docker image to deploy'
-        required: false
+        required: true
         type: string
       llm_image:
         description: 'LLM Docker image to deploy'
-        required: false
+        required: true
         type: string
 
 jobs:
-  check_images:
+  deploy:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
-    outputs:
-      should_deploy: ${{ steps.check_images.outputs.should_deploy }}
-      whisper_image: ${{ steps.check_images.outputs.whisper_image }}
-      tts_image: ${{ steps.check_images.outputs.tts_image }}
-      llm_image: ${{ steps.check_images.outputs.llm_image }}
-    steps:
-      - name: Check which images to deploy
-        id: check_images
-        run: |
-          # For manual triggers, use the provided images or check Docker Hub
-          DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-          WHISPER_IMAGE="${{ github.event.inputs.whisper_image }}"
-          TTS_IMAGE="${{ github.event.inputs.tts_image }}"
-          LLM_IMAGE="${{ github.event.inputs.llm_image }}"
-          
-          # For direct push to this workflow file, use latest images
-          if [ "${{ github.event_name }}" == "push" ]; then
-            WHISPER_IMAGE="${DOCKERHUB_USERNAME}/realtime-voice-whisper:latest"
-            TTS_IMAGE="${DOCKERHUB_USERNAME}/realtime-voice-tts:latest"
-            LLM_IMAGE="${DOCKERHUB_USERNAME}/realtime-voice-llm:latest"
-          fi
-          
-          # Function to check if image exists in Docker Hub
-          check_image() {
-            local image="$1"
-            curl -s -f -L -o /dev/null "https://hub.docker.com/v2/repositories/${image%%:*}/tags/${image##*:}/" && return 0 || return 1
-          }
-          
-          # For workflow_run events, check which workflow completed and verify images
-          if [ "${{ github.event_name }}" == "workflow_run" ]; then
-            COMPLETED_WORKFLOW="${{ github.event.workflow_run.name }}"
-            echo "Workflow completed: $COMPLETED_WORKFLOW"
-            
-            # Set default image names
-            if [ -z "$WHISPER_IMAGE" ]; then WHISPER_IMAGE="${DOCKERHUB_USERNAME}/realtime-voice-whisper:latest"; fi
-            if [ -z "$TTS_IMAGE" ]; then TTS_IMAGE="${DOCKERHUB_USERNAME}/realtime-voice-tts:latest"; fi
-            if [ -z "$LLM_IMAGE" ]; then LLM_IMAGE="${DOCKERHUB_USERNAME}/realtime-voice-llm:latest"; fi
-            
-            # Verify each image exists
-            WHISPER_EXISTS=false
-            TTS_EXISTS=false
-            LLM_EXISTS=false
-            
-            if check_image "${WHISPER_IMAGE#*/}"; then
-              WHISPER_EXISTS=true
-              echo "✓ Whisper image exists: $WHISPER_IMAGE"
-            else
-              echo "✗ Whisper image not found: $WHISPER_IMAGE"
-            fi
-            
-            if check_image "${TTS_IMAGE#*/}"; then
-              TTS_EXISTS=true
-              echo "✓ TTS image exists: $TTS_IMAGE"
-            else
-              echo "✗ TTS image not found: $TTS_IMAGE"
-            fi
-            
-            if check_image "${LLM_IMAGE#*/}"; then
-              LLM_EXISTS=true
-              echo "✓ LLM image exists: $LLM_IMAGE"
-            else
-              echo "✗ LLM image not found: $LLM_IMAGE"
-            fi
-            
-            # Determine if we should deploy
-            if $WHISPER_EXISTS && $TTS_EXISTS && $LLM_EXISTS; then
-              echo "All required images exist. Proceeding with deployment."
-              echo "should_deploy=true" >> $GITHUB_OUTPUT
-            else
-              echo "Not all required images exist. Deployment will be skipped."
-              echo "should_deploy=false" >> $GITHUB_OUTPUT
-              if ! $WHISPER_EXISTS; then WHISPER_IMAGE=""; fi
-              if ! $TTS_EXISTS; then TTS_IMAGE=""; fi
-              if ! $LLM_EXISTS; then LLM_IMAGE=""; fi
-            fi
-          else
-            # For workflow_dispatch or push, proceed with deployment
-            echo "should_deploy=true" >> $GITHUB_OUTPUT
-          fi
-          
-          # Output the image names
-          echo "whisper_image=$WHISPER_IMAGE" >> $GITHUB_OUTPUT
-          echo "tts_image=$TTS_IMAGE" >> $GITHUB_OUTPUT
-          echo "llm_image=$LLM_IMAGE" >> $GITHUB_OUTPUT
-
-  deploy:
-    needs: check_images
-    if: needs.check_images.outputs.should_deploy == 'true'
-    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -133,15 +44,10 @@ jobs:
 
       - name: Deploy Endpoints to RunPod
         run: |
-          # Use the verified Docker image names
-          WHISPER_IMAGE="${{ needs.check_images.outputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}"
-          TTS_IMAGE="${{ needs.check_images.outputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}"
-          LLM_IMAGE="${{ needs.check_images.outputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}"
-          
-          echo "Using images:"
-          echo "  Whisper: $WHISPER_IMAGE"
-          echo "  TTS: $TTS_IMAGE"
-          echo "  LLM: $LLM_IMAGE"
+          # Get the Docker image names from the workflow inputs or build workflows!
+          WHISPER_IMAGE="${{ github.event.inputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}"
+          TTS_IMAGE="${{ github.event.inputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}"
+          LLM_IMAGE="${{ github.event.inputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}"
           
           # Run the deployment script
           python3 scripts/deploy_runpod.py > endpoint_response.json
@@ -168,9 +74,9 @@ jobs:
           echo "LLM_ENDPOINT_ID=$LLM_ENDPOINT_ID" >> $GITHUB_ENV
         env:
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
-          WHISPER_IMAGE: ${{ needs.check_images.outputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}
-          TTS_IMAGE: ${{ needs.check_images.outputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}
-          LLM_IMAGE: ${{ needs.check_images.outputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}
+          WHISPER_IMAGE: ${{ github.event.inputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}
+          TTS_IMAGE: ${{ github.event.inputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}
+          LLM_IMAGE: ${{ github.event.inputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}
 
       - name: Summary
         run: |
