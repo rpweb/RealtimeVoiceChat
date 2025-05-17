@@ -56,28 +56,13 @@ jobs:
           import runpod
           import json
           import os
+          import time
           
           # Initialize RunPod with API key
           runpod.api_key = os.environ["RUNPOD_API_KEY"]
           
           # Check existing endpoints
           endpoints = runpod.get_endpoints()
-          
-          # Get templates using GraphQL query
-          templates_query = """
-          query {
-            myself {
-              templates {
-                id
-                name
-                imageName
-                isServerless
-              }
-            }
-          }
-          """
-          templates_response = runpod.query(templates_query)
-          templates = templates_response.get("data", {}).get("myself", {}).get("templates", [])
           
           endpoint_ids = {
               "whisper": None,
@@ -101,26 +86,55 @@ jobs:
               elif name == "llm-worker":
                   endpoint_ids["llm"] = endpoint.get("id")
           
-          # Find existing templates
-          for template in templates:
-              name = template.get("name")
-              if name == "whisper-worker-template":
-                  template_ids["whisper"] = template.get("id")
-              elif name == "tts-worker-template":
-                  template_ids["tts"] = template.get("id")
-              elif name == "llm-worker-template":
-                  template_ids["llm"] = template.get("id")
-          
           responses = {}
           
-          # Get or create Whisper template
-          if not template_ids["whisper"]:
+          # Try to create or get Whisper template
+          try:
               whisper_template = runpod.create_template(
                   name="whisper-worker-template",
                   image_name="$WHISPER_IMAGE",
                   is_serverless=True
               )
-              template_ids["whisper"] = whisper_template["id"]
+              template_ids["whisper"] = whisper_template.get("id")
+          except Exception as e:
+              # If template already exists with this name, error message contains the ID
+              error_msg = str(e)
+              if "already exists" in error_msg.lower() and "id: " in error_msg:
+                  template_ids["whisper"] = error_msg.split("id: ")[1].split(")")[0].strip()
+              else:
+                  raise e
+          
+          # Try to create or get TTS template
+          try:
+              tts_template = runpod.create_template(
+                  name="tts-worker-template",
+                  image_name="$TTS_IMAGE",
+                  is_serverless=True
+              )
+              template_ids["tts"] = tts_template.get("id")
+          except Exception as e:
+              # If template already exists with this name, error message contains the ID
+              error_msg = str(e)
+              if "already exists" in error_msg.lower() and "id: " in error_msg:
+                  template_ids["tts"] = error_msg.split("id: ")[1].split(")")[0].strip()
+              else:
+                  raise e
+          
+          # Try to create or get LLM template
+          try:
+              llm_template = runpod.create_template(
+                  name="llm-worker-template",
+                  image_name="$LLM_IMAGE",
+                  is_serverless=True
+              )
+              template_ids["llm"] = llm_template.get("id")
+          except Exception as e:
+              # If template already exists with this name, error message contains the ID
+              error_msg = str(e)
+              if "already exists" in error_msg.lower() and "id: " in error_msg:
+                  template_ids["llm"] = error_msg.split("id: ")[1].split(")")[0].strip()
+              else:
+                  raise e
           
           # Update or create Whisper endpoint
           if endpoint_ids["whisper"]:
@@ -139,15 +153,6 @@ jobs:
                   workers_max=1
               )
           
-          # Get or create TTS template
-          if not template_ids["tts"]:
-              tts_template = runpod.create_template(
-                  name="tts-worker-template",
-                  image_name="$TTS_IMAGE",
-                  is_serverless=True
-              )
-              template_ids["tts"] = tts_template["id"]
-          
           # Update or create TTS endpoint
           if endpoint_ids["tts"]:
               responses["tts"] = runpod.update_endpoint(
@@ -164,15 +169,6 @@ jobs:
                   gpu_ids=["NVIDIA RTX A5000"],
                   workers_max=1
               )
-          
-          # Get or create LLM template
-          if not template_ids["llm"]:
-              llm_template = runpod.create_template(
-                  name="llm-worker-template",
-                  image_name="$LLM_IMAGE",
-                  is_serverless=True
-              )
-              template_ids["llm"] = llm_template["id"]
           
           # Update or create LLM endpoint
           if endpoint_ids["llm"]:
