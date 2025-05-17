@@ -302,7 +302,7 @@ def main():
                         name=worker_name,
                         template_id=template_id,
                         gpu_ids=[gpu_type],
-                        workers_max=3,      # Increased from 1 to 3 for concurrent usage
+                        workers_max=1,      # Only 1 worker for testing purposes
                         workers_min=0,      # No always-on workers (saves money but adds cold start)
                         idle_timeout=5,     # Scale down after 5 seconds of inactivity (more cost effective)
                         flashboot=True      # Enable flashboot for faster cold starts (2-3x quicker)
