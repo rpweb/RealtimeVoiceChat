@@ -14,15 +14,15 @@ on:
     inputs:
       whisper_image:
         description: 'Whisper Docker image to deploy'
-        required: true
+        required: false
         type: string
       tts_image:
         description: 'TTS Docker image to deploy'
-        required: true
+        required: false
         type: string
       llm_image:
         description: 'LLM Docker image to deploy'
-        required: true
+        required: false
         type: string
 
 jobs:
