@@ -17,7 +17,7 @@ export function setupTwilioRoutes(app: Express, sessionManager: SessionManager) 
     
     // Use <Gather> to collect user speech
     const gather = twiml.gather({
-      input: 'speech',
+      input: ['speech'],
       speechTimeout: 'auto',
       speechModel: 'phone_call',
       language: 'en-US',
@@ -66,7 +66,7 @@ export function setupTwilioRoutes(app: Express, sessionManager: SessionManager) 
         
         // Continue the conversation
         const gather = twiml.gather({
-          input: 'speech',
+          input: ['speech'],
           speechTimeout: 'auto',
           speechModel: 'phone_call',
           language: 'en-US',
