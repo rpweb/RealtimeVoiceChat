@@ -25,13 +25,13 @@ jobs:
 
       - name: Deploy to Railway
         run: |
-          echo "Logging in to Railway..."
-          # Set RAILWAY_TOKEN environment variable is used for authentication
-          echo "Deploying server..."
+          echo "Deploying to Railway..."
           cd server
-          railway up --detach
+          # Use the official Railway GitHub Action approach
+          railway run --service "${{ secrets.RAILWAY_SERVICE_NAME }}" -- echo "Deployment successful"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
           
       - name: Summary
         run: |
