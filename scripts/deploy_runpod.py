@@ -336,7 +336,7 @@ def main():
                         name=worker_name,
                         template_id=template_id,
                         network_volume_id=volume_id,
-                        gpu_ids=[gpu_type],
+                        gpu_ids=gpu_type,
                         workers_max=1,
                         workers_min=0,
                         idle_timeout=5,
