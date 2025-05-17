@@ -23,12 +23,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY handler.py predict.py /app/
-COPY schema.py /app/
-COPY entrypoint.py /app/
+COPY handler.py predict.py schema.py start.py /app/
 
-# Make entrypoint executable
-RUN chmod +x /app/entrypoint.py
+# Make start script executable
+RUN chmod +x /app/start.py
 
 # Expose port for API
 EXPOSE 8000
@@ -36,5 +34,5 @@ EXPOSE 8000
 # Set environment variable to force module path recognition
 ENV PYTHONPATH=/app
 
-# Use our debug entrypoint script
-CMD ["python", "/app/entrypoint.py"] 
+# Use our corrected start script
+CMD ["python", "/app/start.py"] 
