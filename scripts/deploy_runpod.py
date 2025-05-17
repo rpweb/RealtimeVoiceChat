@@ -219,14 +219,17 @@ def main():
         if not all([whisper_image, tts_image, llm_image]):
             raise ValueError("Missing one or more Docker image environment variables")
             
-        # Get or create network volume for model storage
-        volume_id = get_or_create_network_volume(name="models-volume", size_gb=40)
-        if not volume_id:
-            print("Warning: Could not create network volume. Continuing without volume.", file=sys.stderr)
+        # Get or create network volume for model storage - make it optional
+        volume_id = None
+        try:
+            volume_id = get_or_create_network_volume(name="models-volume", size_gb=40)
+        except Exception as e:
+            print(f"Warning: Could not create network volume: {e}. Continuing without volume.", file=sys.stderr)
 
         # Get endpoints
         endpoints = get_endpoints()
         endpoint_ids = {"whisper": None, "tts": None, "llm": None}
+        
         for endpoint in endpoints:
             name = endpoint.get("name")
             if name == "whisper-worker":
@@ -239,20 +242,20 @@ def main():
         # Define environment variables for each worker
         env_vars = {
             "whisper": {
-                "MODEL_PATH": "/workspace/models",
+                "MODEL_PATH": "/workspace/models" if volume_id else "./models",
                 "CUDA_VISIBLE_DEVICES": "0"
             },
             "tts": {
-                "MODEL_PATH": "/workspace/models",
-                "ADDITIONAL_MODELS_DIR": "/workspace/custom-voices",
+                "MODEL_PATH": "/workspace/models" if volume_id else "./models",
+                "ADDITIONAL_MODELS_DIR": "/workspace/custom-voices" if volume_id else "./custom-voices",
                 "DEFAULT_VOICE": "lessac"
             },
             "llm": {
                 "MODEL_ID": "meta-llama/Meta-Llama-3-8B-Instruct",
-                "MODEL_PATH": "/workspace/models",
+                "MODEL_PATH": "/workspace/models" if volume_id else "./models",
                 "GPU_COUNT": "1",
                 "GPU_MEMORY_UTILIZATION": "0.85",
-                "CACHE_DIR": "/workspace/models/cache",
+                "CACHE_DIR": "/workspace/models/cache" if volume_id else "./models/cache",
                 "PRELOAD_MODEL": "true"
             }
         }
