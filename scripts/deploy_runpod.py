@@ -1,6 +1,7 @@
 import runpod
 import json
 import os
+import sys
 import requests
 from typing import Dict, Optional
 
@@ -31,10 +32,10 @@ def get_endpoints() -> list:
             headers={"Authorization": f"Bearer {runpod.api_key}"}
         ).json()
         if "errors" in response:
-            print(f"GraphQL errors in get_endpoints: {json.dumps(response['errors'], indent=2)}")
+            print(f"GraphQL errors in get_endpoints: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
         return response.get("data", {}).get("myself", {}).get("endpoints", [])
     except Exception as e:
-        print(f"Error fetching endpoints: {e}")
+        print(f"Error fetching endpoints: {e}", file=sys.stderr)
         return []
 
 def get_templates() -> list:
@@ -58,23 +59,23 @@ def get_templates() -> list:
             headers={"Authorization": f"Bearer {runpod.api_key}"}
         ).json()
         if "errors" in response:
-            print(f"GraphQL errors in get_templates: {json.dumps(response['errors'], indent=2)}")
+            print(f"GraphQL errors in get_templates: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
         templates = response.get("data", {}).get("myself", {}).get("podTemplates", [])
-        print(f"Templates fetched: {json.dumps(templates, indent=2)}")
+        print(f"Templates fetched: {json.dumps(templates, indent=2)}", file=sys.stderr)
         return templates
     except Exception as e:
-        print(f"Error fetching templates: {e}")
+        print(f"Error fetching templates: {e}", file=sys.stderr)
         return []
 
 def create_or_update_template(name: str, image_name: str) -> Optional[str]:
     """Create a new template or return the ID of an existing one with valid imageName."""
     templates = get_templates()
-    print(f"Searching for template '{name}'")
+    print(f"Searching for template '{name}'", file=sys.stderr)
     for template in templates:
         if template.get("name") == name:
             is_serverless = template.get("isServerless", False)
             current_image = template.get("imageName", "")
-            print(f"Found template '{name}' with ID: {template.get('id')}, isServerless: {is_serverless}, imageName: {current_image}")
+            print(f"Found template '{name}' with ID: {template.get('id')}, isServerless: {is_serverless}, imageName: {current_image}", file=sys.stderr)
             if not is_serverless:
                 raise ValueError(f"Template '{name}' is not serverless")
             if current_image.startswith("$") or not current_image:
@@ -82,22 +83,22 @@ def create_or_update_template(name: str, image_name: str) -> Optional[str]:
             return template.get("id")
     
     try:
-        print(f"Creating new template '{name}' with image '{image_name}'")
+        print(f"Creating new template '{name}' with image '{image_name}'", file=sys.stderr)
         template = runpod.create_template(
             name=name,
             image_name=image_name,
             is_serverless=True,
             container_disk_in_gb=5
         )
-        print(f"Created template '{name}' with ID: {template['id']}")
+        print(f"Created template '{name}' with ID: {template['id']}", file=sys.stderr)
         return template["id"]
     except runpod.error.QueryError as e:
-        print(f"Error creating template '{name}': {str(e)}")
+        print(f"Error creating template '{name}': {str(e)}", file=sys.stderr)
         if "Template name must be unique" in str(e):
             raise ValueError(f"Template '{name}' exists with invalid imageName. Update it in RunPod console.")
         raise e
     except Exception as e:
-        print(f"Unexpected error creating template '{name}': {str(e)}")
+        print(f"Unexpected error creating template '{name}': {str(e)}", file=sys.stderr)
         raise
 
 def main():
@@ -139,13 +140,13 @@ def main():
             endpoint_id = endpoint_ids[worker]
             try:
                 if endpoint_id:
-                    print(f"Updating endpoint '{worker_name}' with ID: {endpoint_id}")
+                    print(f"Updating endpoint '{worker_name}' with ID: {endpoint_id}", file=sys.stderr)
                     responses[worker] = runpod.update_endpoint_template(
                         endpoint_id=endpoint_id,
                         template_id=template_id
                     )
                 else:
-                    print(f"Creating new endpoint '{worker_name}' with template ID: {template_id}")
+                    print(f"Creating new endpoint '{worker_name}' with template ID: {template_id}", file=sys.stderr)
                     responses[worker] = runpod.create_endpoint(
                         name=worker_name,
                         template_id=template_id,
@@ -153,13 +154,15 @@ def main():
                         workers_max=1
                     )
             except Exception as e:
-                print(f"Error deploying {worker_name}: {e}")
+                print(f"Error deploying {worker_name}: {e}", file=sys.stderr)
                 responses[worker] = {"error": str(e)}
 
+        # Output JSON to stdout
         print(json.dumps(responses))
     except Exception as e:
-        print(f"Error in main: {e}")
-        exit(1)
+        print(f"Error in main: {e}", file=sys.stderr)
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
