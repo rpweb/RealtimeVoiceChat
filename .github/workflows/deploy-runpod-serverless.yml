@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/deploy-runpod-serverless.yml'
+      - 'scripts/deploy_runpod.py'
     branches: [main]
   workflow_run:
     workflows: ["Build and Push Whisper Worker", "Build and Push TTS Worker", "Build and Push LLM Worker"]

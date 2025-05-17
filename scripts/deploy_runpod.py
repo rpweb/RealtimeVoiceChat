@@ -113,7 +113,6 @@ def create_or_update_template(
     name: str, 
     image_name: str, 
     env_vars: Dict[str, str] = None,
-    volume_id: str = None,
     retries: int = 3,
     delay: int = 5
 ) -> Optional[str]:
@@ -146,52 +145,17 @@ def create_or_update_template(
         print(f"Created template with SDK, ID: {template_id}", file=sys.stderr)
         
         # If we have env vars or volume, update the template
-        if env_vars or volume_id:
-            print(f"Updating template with env vars and volume", file=sys.stderr)
-            if volume_id:
-                # Update with volume mount
-                try:
-                    # Use GraphQL for volume mounting
-                    mutation = """
-                    mutation ($id: ID!, $input: PodTemplateUpdateInput!) {
-                        podTemplateUpdate(id: $id, input: $input) {
-                            id
-                        }
-                    }
-                    """
-                    variables = {
-                        "id": template_id,
-                        "input": {
-                            "volumeMounts": [{"volumeId": volume_id, "mountPath": "/workspace"}]
-                        }
-                    }
-                    
-                    # Add env vars if present
-                    if env_vars:
-                        variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
-                        
-                    response = requests.post(
-                        "https://api.runpod.io/graphql",
-                        json={"query": mutation, "variables": variables},
-                        headers={"Authorization": f"Bearer {runpod.api_key}"}
-                    ).json()
-                    
-                    if "errors" in response:
-                        print(f"Warning: Error updating template: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
-                        # Continue anyway since template was created
-                except Exception as update_error:
-                    print(f"Warning: Failed to update template with volume: {update_error}", file=sys.stderr)
-                    # Continue anyway since template was created
-            elif env_vars:
-                # Only update env vars, which the SDK supports directly
-                try:
-                    runpod.update_template(
-                        template_id=template_id,
-                        env=env_vars
-                    )
-                except Exception as env_error:
-                    print(f"Warning: Failed to update template with env vars: {env_error}", file=sys.stderr)
-        
+        print(f"Updating template with env vars and volume", file=sys.stderr)
+        if env_vars:
+            # Only update env vars, which the SDK supports directly
+            try:
+                runpod.update_template(
+                    template_id=template_id,
+                    env=env_vars
+                )
+            except Exception as env_error:
+                print(f"Warning: Failed to update template with env vars: {env_error}", file=sys.stderr)
+    
         return template_id
     
     except Exception as sdk_error:
@@ -221,11 +185,7 @@ def create_or_update_template(
                 # Add env vars if present
                 if env_vars:
                     variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
-                
-                # Add volume mount if present
-                if volume_id:
-                    variables["input"]["volumeMounts"] = [{"volumeId": volume_id, "mountPath": "/workspace"}]
-                
+
                 # Try to authenticate with Docker Hub if credentials are available
                 if os.getenv("DOCKERHUB_USERNAME") and os.getenv("DOCKERHUB_PASSWORD"):
                     variables["input"]["dockerCredentials"] = {
@@ -335,19 +295,16 @@ def main():
                 "whisper-worker-template", 
                 whisper_image, 
                 env_vars=env_vars["whisper"],
-                volume_id=volume_id
             ),
             "tts": create_or_update_template(
                 "tts-worker-template", 
                 tts_image, 
                 env_vars=env_vars["tts"],
-                volume_id=volume_id
             ),
             "llm": create_or_update_template(
                 "llm-worker-template", 
                 llm_image, 
                 env_vars=env_vars["llm"],
-                volume_id=volume_id
             )
         }
 
@@ -378,6 +335,7 @@ def main():
                     responses[worker] = runpod.create_endpoint(
                         name=worker_name,
                         template_id=template_id,
+                        network_volume_id=volume_id,
                         gpu_ids=[gpu_type],
                         workers_max=1,
                         workers_min=0,
