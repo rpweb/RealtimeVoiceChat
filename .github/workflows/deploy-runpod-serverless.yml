@@ -49,154 +49,18 @@ jobs:
           TTS_IMAGE="${{ github.event.inputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}"
           LLM_IMAGE="${{ github.event.inputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}"
           
-          # Deploy to RunPod Serverless
-          ENDPOINT_RESPONSE=$(python3 -c '
-          import runpod
-          import json
-          import os
-          import requests
-          
-          # Initialize RunPod with API key
-          runpod.api_key = os.environ["RUNPOD_API_KEY"]
-          
-          # Get endpoints via GraphQL
-          endpoints_gql = """
-          query {
-            myself {
-              endpoints {
-                id
-                name
-                templateId
-              }
-            }
-          }
-          """
-          endpoints_response = requests.post(
-              "https://api.runpod.io/graphql",
-              json={"query": endpoints_gql},
-              headers={"Authorization": f"Bearer {runpod.api_key}"}
-          ).json()
+          # Run the deployment script
+          python3 scripts/deploy_runpod.py > endpoint_response.json
           
           # Extract endpoint IDs
-          endpoint_ids = {
-              "whisper": None,
-              "tts": None,
-              "llm": None
-          }
-          
-          endpoints = endpoints_response.get("data", {}).get("myself", {}).get("endpoints", [])
-          for endpoint in endpoints:
-              name = endpoint.get("name")
-              if name == "whisper-worker":
-                  endpoint_ids["whisper"] = endpoint.get("id")
-              elif name == "tts-worker":
-                  endpoint_ids["tts"] = endpoint.get("id")
-              elif name == "llm-worker":
-                  endpoint_ids["llm"] = endpoint.get("id")
-          
-          # Get templates via GraphQL
-          templates_gql = """
-          query {
-            myself {
-              templates {
-                id
-                name
-                imageName
-                isServerless
-              }
-            }
-          }
-          """
-          templates_response = requests.post(
-              "https://api.runpod.io/graphql",
-              json={"query": templates_gql},
-              headers={"Authorization": f"Bearer {runpod.api_key}"}
-          ).json()
-          
-          # Extract templates
-          templates = templates_response.get("data", {}).get("myself", {}).get("templates", [])
-          
-          # Template IDs for each worker
-          template_ids = {
-              "whisper": None,
-              "tts": None,
-              "llm": None
-          }
-          
-          # Match existing templates
-          for template in templates:
-              if template.get("name") == "whisper-worker-template" and template.get("isServerless"):
-                  template_ids["whisper"] = template.get("id")
-              elif template.get("name") == "tts-worker-template" and template.get("isServerless"):
-                  template_ids["tts"] = template.get("id")
-              elif template.get("name") == "llm-worker-template" and template.get("isServerless"):
-                  template_ids["llm"] = template.get("id")
-          
-          # Create or update templates if they don''t exist
-          def create_or_update_template(name, image_name):
-              try:
-                  template = runpod.create_template(
-                      name=name,
-                      image_name=image_name,
-                      is_serverless=True,
-                      container_disk_in_gb=5
-                  )
-                  return template["id"]
-              except runpod.error.QueryError as e:
-                  if "Template name must be unique" in str(e):
-                      # Template exists, return its ID
-                      for template in templates:
-                          if template.get("name") == name:
-                              return template.get("id")
-                  raise e
-          
-          if not template_ids["whisper"]:
-              template_ids["whisper"] = create_or_update_template("whisper-worker-template", "'"$WHISPER_IMAGE"'")
-          
-          if not template_ids["tts"]:
-              template_ids["tts"] = create_or_update_template("tts-worker-template", "'"$TTS_IMAGE"'")
-          
-          if not template_ids["llm"]:
-              template_ids["llm"] = create_or_update_template("llm-worker-template", "'"$LLM_IMAGE"'")
-          
-          responses = {}
-          
-          # Create or update endpoints using the template IDs
-          for worker, endpoint_id in endpoint_ids.items():
-              worker_name = f"{worker}-worker"
-              template_id = template_ids[worker]
-              try:
-                  if endpoint_id:
-                      responses[worker] = runpod.update_endpoint(
-                          endpoint_id=endpoint_id,
-                          template_id=template_id,
-                          gpu_ids=["NVIDIA RTX A5000"],
-                          name=worker_name,
-                          active=True
-                      )
-                  else:
-                      responses[worker] = runpod.create_endpoint(
-                          name=worker_name,
-                          template_id=template_id,
-                          gpu_ids=["NVIDIA RTX A5000"],
-                          workers_max=1
-                      )
-              except Exception as e:
-                  print(f"Error deploying {worker_name}: {e}")
-                  responses[worker] = {"error": str(e)}
-          
-          print(json.dumps(responses))
-          ')
-          
-          # Extract endpoint IDs and save them
-          WHISPER_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.whisper.id // ""')
-          TTS_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.tts.id // ""')
-          LLM_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.llm.id // ""')
+          WHISPER_ENDPOINT_ID=$(jq -r '.whisper.id // ""' endpoint_response.json)
+          TTS_ENDPOINT_ID=$(jq -r '.tts.id // ""' endpoint_response.json)
+          LLM_ENDPOINT_ID=$(jq -r '.llm.id // ""' endpoint_response.json)
           
           # Check for errors
           if [ -z "$WHISPER_ENDPOINT_ID" ] || [ -z "$TTS_ENDPOINT_ID" ] || [ -z "$LLM_ENDPOINT_ID" ]; then
             echo "Error: One or more endpoints failed to deploy"
-            echo "Response: $ENDPOINT_RESPONSE"
+            cat endpoint_response.json
             exit 1
           fi
           
@@ -210,6 +74,9 @@ jobs:
           echo "LLM_ENDPOINT_ID=$LLM_ENDPOINT_ID" >> $GITHUB_ENV
         env:
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          WHISPER_IMAGE: ${{ github.event.inputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}
+          TTS_IMAGE: ${{ github.event.inputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}
+          LLM_IMAGE: ${{ github.event.inputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}
 
       - name: Summary
         run: |
@@ -219,12 +86,3 @@ jobs:
           echo ""
           echo "⚠️ Important:"
           echo "1. Make sure to set RUNPOD_API_KEY in your backend environment variables"
-
-      # Optional: Deploy the client app to Vercel
-      # - name: Deploy to Vercel
-      #   uses: amondnet/vercel-action@v20
-      #   with:
-      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
-      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-      #     working-directory: client-app 
