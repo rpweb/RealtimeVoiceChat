@@ -17,12 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create symbolic link for python
 RUN ln -sf /usr/bin/python3 /usr/bin/python
+RUN ln -sf /usr/bin/pip3 /usr/bin/pip
 
 # Set working directory
 WORKDIR /app
 
 # Install PyTorch directly
 RUN pip install --no-cache-dir torch==2.1.2 --index-url https://download.pytorch.org/whl/cu121
+
+# Install runpod explicitly first
+RUN pip install --no-cache-dir runpod==1.6.0
 
 # Install Python dependencies with explicit vLLM version
 COPY requirements.txt .
@@ -35,5 +39,5 @@ COPY schema.py /app/
 # Expose port for API
 EXPOSE 8000
 
-# Start the service with environment set to print everything immediately
+# Start the service
 CMD ["python", "-m", "runpod.serverless.start"] 
