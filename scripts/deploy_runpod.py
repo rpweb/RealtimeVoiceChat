@@ -61,7 +61,6 @@ def get_templates() -> list:
         if "errors" in response:
             print(f"GraphQL errors in get_templates: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
         templates = response.get("data", {}).get("myself", {}).get("podTemplates", [])
-        print(f"Templates fetched: {json.dumps(templates, indent=2)}", file=sys.stderr)
         return templates
     except Exception as e:
         print(f"Error fetching templates: {e}", file=sys.stderr)
