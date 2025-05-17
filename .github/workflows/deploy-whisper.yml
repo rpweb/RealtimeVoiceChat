@@ -1,0 +1,62 @@
+name: Deploy Whisper Endpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      docker_image:
+        description: 'Docker image to deploy'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to RunPod
+        run: |
+          # Get the Docker image name from the workflow input
+          DOCKER_IMAGE="${{ github.event.inputs.docker_image }}"
+          
+          # Deploy to RunPod Serverless
+          ENDPOINT_RESPONSE=$(python3 -c '
+          import runpod
+          import json
+          import os
+          
+          # Initialize RunPod with API key
+          runpod.api_key = os.environ["RUNPOD_API_KEY"]
+          
+          # Check if endpoint already exists
+          endpoints = runpod.get_endpoints()
+          whisper_endpoint_id = None
+          
+          for endpoint in endpoints:
+              if endpoint.get("name") == "whisper-worker":
+                  whisper_endpoint_id = endpoint.get("id")
+                  break
+          
+          if whisper_endpoint_id:
+              # Update existing endpoint
+              response = runpod.update_endpoint(
+                  endpoint_id=whisper_endpoint_id,
+                  docker_image="$DOCKER_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  name="whisper-worker",
+                  active=True
+              )
+          else:
+              # Create new endpoint
+              response = runpod.create_endpoint(
+                  name="whisper-worker",
+                  docker_image="$DOCKER_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"]
+              )
+          
+          print(json.dumps(response))
+          ')
+          
+          # Extract endpoint ID and save it
+          WHISPER_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
+          echo "Whisper endpoint deployed: $WHISPER_ENDPOINT_ID"
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }} 

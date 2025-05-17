@@ -31,3 +31,4 @@ dist/
 build/
 *.egg-info/ 
 code/models
+node_modules

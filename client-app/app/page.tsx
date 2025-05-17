@@ -4,9 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useChat, Message as AIMessage } from 'ai/react';
 import { io, Socket } from 'socket.io-client';
-import AudioRecorder from '@/components/AudioRecorder';
+import dynamic from 'next/dynamic';
 import ChatMessages from '@/components/ChatMessages';
 import { fetchEndpointConfig, getEndpointIds } from '@/lib/runpod';
+
+// Dynamically import AudioRecorder with no SSR
+const AudioRecorder = dynamic(() => import('@/components/AudioRecorder'), {
+  ssr: false
+});
 
 // Backend service URL
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://your-railway-server.railway.app';
