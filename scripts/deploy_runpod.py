@@ -30,6 +30,8 @@ def get_endpoints() -> list:
             json={"query": query},
             headers={"Authorization": f"Bearer {runpod.api_key}"}
         ).json()
+        if "errors" in response:
+            print(f"GraphQL errors in get_endpoints: {json.dumps(response['errors'], indent=2)}")
         return response.get("data", {}).get("myself", {}).get("endpoints", [])
     except Exception as e:
         print(f"Error fetching endpoints: {e}")
@@ -40,11 +42,11 @@ def get_templates() -> list:
     query = """
     query {
       myself {
-        templates {
+        podTemplates {
           id
           name
-          imageName
           isServerless
+          imageName
         }
       }
     }
@@ -55,17 +57,28 @@ def get_templates() -> list:
             json={"query": query},
             headers={"Authorization": f"Bearer {runpod.api_key}"}
         ).json()
-        return response.get("data", {}).get("myself", {}).get("templates", [])
+        if "errors" in response:
+            print(f"GraphQL errors in get_templates: {json.dumps(response['errors'], indent=2)}")
+        templates = response.get("data", {}).get("myself", {}).get("podTemplates", [])
+        print(f"Templates fetched: {json.dumps(templates, indent=2)}")
+        return templates
     except Exception as e:
         print(f"Error fetching templates: {e}")
         return []
 
 def create_or_update_template(name: str, image_name: str) -> Optional[str]:
-    """Create a new template or return the ID of an existing one."""
-    templates = get_templates()  # Refresh templates list
+    """Create a new template or return the ID of an existing one with valid imageName."""
+    templates = get_templates()
+    print(f"Searching for template '{name}'")
     for template in templates:
-        if template.get("name") == name and template.get("isServerless"):
-            print(f"Found existing template '{name}' with ID: {template.get('id')}")
+        if template.get("name") == name:
+            is_serverless = template.get("isServerless", False)
+            current_image = template.get("imageName", "")
+            print(f"Found template '{name}' with ID: {template.get('id')}, isServerless: {is_serverless}, imageName: {current_image}")
+            if not is_serverless:
+                raise ValueError(f"Template '{name}' is not serverless")
+            if current_image.startswith("$") or not current_image:
+                raise ValueError(f"Template '{name}' has invalid imageName '{current_image}'. Update to '{image_name}' in RunPod console.")
             return template.get("id")
     
     try:
@@ -79,16 +92,13 @@ def create_or_update_template(name: str, image_name: str) -> Optional[str]:
         print(f"Created template '{name}' with ID: {template['id']}")
         return template["id"]
     except runpod.error.QueryError as e:
+        print(f"Error creating template '{name}': {str(e)}")
         if "Template name must be unique" in str(e):
-            print(f"Template '{name}' already exists, fetching ID")
-            templates = get_templates()  # Retry fetching templates
-            for template in templates:
-                if template.get("name") == name and template.get("isServerless"):
-                    print(f"Retrieved existing template '{name}' with ID: {template.get('id')}")
-                    return template.get("id")
-            print(f"Error: Could not find existing template '{name}' despite duplicate name error")
-            raise
+            raise ValueError(f"Template '{name}' exists with invalid imageName. Update it in RunPod console.")
         raise e
+    except Exception as e:
+        print(f"Unexpected error creating template '{name}': {str(e)}")
+        raise
 
 def main():
     """Deploy RunPod serverless endpoints."""
@@ -129,16 +139,13 @@ def main():
             endpoint_id = endpoint_ids[worker]
             try:
                 if endpoint_id:
-                    print(f"Updating endpoint '{worker_name}' with template ID: {template_id}")
-                    responses[worker] = runpod.update_endpoint(
+                    print(f"Updating endpoint '{worker_name}' with ID: {endpoint_id}")
+                    responses[worker] = runpod.update_endpoint_template(
                         endpoint_id=endpoint_id,
-                        template_id=template_id,
-                        gpu_ids=["NVIDIA RTX A5000"],
-                        name=worker_name,
-                        active=True
+                        template_id=template_id
                     )
                 else:
-                    print(f"Creating endpoint '{worker_name}' with template ID: {template_id}")
+                    print(f"Creating new endpoint '{worker_name}' with template ID: {template_id}")
                     responses[worker] = runpod.create_endpoint(
                         name=worker_name,
                         template_id=template_id,
