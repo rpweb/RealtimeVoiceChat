@@ -4,13 +4,27 @@ import os
 import sys
 import requests
 from typing import Dict, Optional, List
+from time import sleep
+from requests.exceptions import RequestException
 
 def initialize_runpod() -> None:
-    """Initialize RunPod with API key."""
+    """Initialize RunPod with API key and validate."""
     api_key = os.getenv("RUNPOD_API_KEY")
     if not api_key:
         raise ValueError("RUNPOD_API_KEY environment variable is not set")
     runpod.api_key = api_key
+    # Test API key
+    test_query = """query { myself { id } }"""
+    try:
+        response = requests.post(
+            "https://api.runpod.io/graphql",
+            json={"query": test_query},
+            headers={"Authorization": f"Bearer {api_key}"}
+        ).json()
+        if "errors" in response:
+            raise ValueError(f"Invalid API key: {json.dumps(response['errors'], indent=2)}")
+    except Exception as e:
+        raise ValueError(f"API key validation failed: {e}")
 
 def get_endpoints() -> list:
     """Retrieve all RunPod endpoints via GraphQL."""
@@ -66,15 +80,33 @@ def get_templates() -> list:
         print(f"Error fetching templates: {e}", file=sys.stderr)
         return []
 
+def get_volumes() -> list:
+    """Retrieve all RunPod volumes via GraphQL."""
+    query = """query { myself { volumes { id name } } }"""
+    try:
+        response = requests.post(
+            "https://api.runpod.io/graphql",
+            json={"query": query},
+            headers={"Authorization": f"Bearer {runpod.api_key}"}
+        ).json()
+        if "errors" in response:
+            print(f"GraphQL errors in get_volumes: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
+        return response.get("data", {}).get("myself", {}).get("volumes", [])
+    except Exception as e:
+        print(f"Error fetching volumes: {e}", file=sys.stderr)
+        return []
+
 def create_or_update_template(
     name: str, 
     image_name: str, 
     env_vars: Dict[str, str] = None,
-    volume_id: str = None
+    volume_id: str = None,
+    retries: int = 3,
+    delay: int = 5
 ) -> Optional[str]:
     """Create a new template or return the ID of an existing one with valid imageName."""
     templates = get_templates()
-    print(f"Searching for template '{name}'", file=sys.stderr)
+    print(f"Searching for template '{name}' with image '{image_name}'", file=sys.stderr)
     for template in templates:
         if template.get("name") == name:
             is_serverless = template.get("isServerless", False)
@@ -86,74 +118,60 @@ def create_or_update_template(
                 raise ValueError(f"Template '{name}' has invalid imageName '{current_image}'. Update to '{image_name}' in RunPod console.")
             return template.get("id")
     
-    try:
-        # Prepare environment variables
-        environment = {}
-        if env_vars:
-            environment = env_vars
-            
-        # Prepare volume mounts
-        container_disk_in_gb = 5
-        volume_mounts = []
-        if volume_id:
-            volume_mounts.append({
-                "volumeId": volume_id,
-                "mountPath": "/workspace"
-            })
-            
-        print(f"Creating new template '{name}' with image '{image_name}'", file=sys.stderr)
-        
-        # Use GraphQL to create template with env vars and volume
-        mutation = """
-        mutation ($input: PodTemplateInput!) {
-            podTemplateSave(input: $input) {
-                id
-            }
+    # Prepare environment variables
+    environment = env_vars or {}
+    container_disk_in_gb = 5
+    volume_mounts = [{"volumeId": volume_id, "mountPath": "/workspace"}] if volume_id else []
+    
+    print(f"Creating new template '{name}' with image '{image_name}', env: {environment}, volume: {volume_id}", file=sys.stderr)
+    
+    mutation = """
+    mutation ($input: PodTemplateInput!) {
+        podTemplateSave(input: $input) {
+            id
         }
-        """
-        
-        variables = {
-            "input": {
-                "name": name,
-                "imageName": image_name,
-                "isServerless": True,
-                "containerDiskSizeGB": container_disk_in_gb
-            }
+    }
+    """
+    
+    variables = {
+        "input": {
+            "name": name,
+            "imageName": image_name,
+            "isServerless": True,
+            "containerDiskSizeGB": container_disk_in_gb
         }
-        
-        # Add environment variables if provided
-        if env_vars:
-            env_list = []
-            for key, value in env_vars.items():
-                env_list.append({"key": key, "value": value})
-            variables["input"]["env"] = env_list
-            
-        # Add volume mounts if provided
-        if volume_id:
-            variables["input"]["volumeMounts"] = [{"volumeId": volume_id, "mountPath": "/workspace"}]
-            
-        response = requests.post(
-            "https://api.runpod.io/graphql",
-            json={"query": mutation, "variables": variables},
-            headers={"Authorization": f"Bearer {runpod.api_key}"}
-        ).json()
-        
-        if "errors" in response:
-            error_msg = response.get("errors", [{}])[0].get("message", "Unknown error")
-            print(f"Error creating template '{name}': {error_msg}", file=sys.stderr)
-            if "Template name must be unique" in error_msg:
-                raise ValueError(f"Template '{name}' exists with invalid imageName. Update it in RunPod console.")
-            raise Exception(error_msg)
-            
-        template_id = response.get("data", {}).get("podTemplateSave", {}).get("id")
-        if not template_id:
-            raise Exception(f"Failed to create template: {json.dumps(response, indent=2)}")
-            
-        print(f"Created template '{name}' with ID: {template_id}", file=sys.stderr)
-        return template_id
-    except Exception as e:
-        print(f"Error creating template '{name}': {str(e)}", file=sys.stderr)
-        raise
+    }
+    
+    if env_vars:
+        variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
+    if volume_id:
+        variables["input"]["volumeMounts"] = volume_mounts
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(
+                "https://api.runpod.io/graphql",
+                json={"query": mutation, "variables": variables},
+                headers={"Authorization": f"Bearer {runpod.api_key}"}
+            ).json()
+            if "errors" in response:
+                error_msg = response.get("errors", [{}])[0].get("message", "Unknown error")
+                print(f"Attempt {attempt + 1}/{retries}: Error creating template '{name}': {error_msg}", file=sys.stderr)
+                if attempt < retries - 1:
+                    sleep(delay)
+                    continue
+                raise Exception(error_msg)
+            template_id = response.get("data", {}).get("podTemplateSave", {}).get("id")
+            if not template_id:
+                raise Exception(f"Failed to create template: {json.dumps(response, indent=2)}")
+            print(f"Created template '{name}' with ID: {template_id}", file=sys.stderr)
+            return template_id
+        except RequestException as e:
+            print(f"Attempt {attempt + 1}/{retries}: Network error creating template '{name}': {e}", file=sys.stderr)
+            if attempt < retries - 1:
+                sleep(delay)
+                continue
+            raise
 
 def main():
     """Deploy RunPod serverless endpoints."""
@@ -170,6 +188,11 @@ def main():
         # Use manually provided volume ID
         volume_id = "ngb3vr286n"  # Fixed volume ID
         print(f"Using existing volume with ID: {volume_id}", file=sys.stderr)
+
+        # Validate volume ID
+        volumes = get_volumes()
+        if not any(v["id"] == volume_id for v in volumes):
+            raise ValueError(f"Volume ID {volume_id} not found. Available volumes: {volumes}")
 
         # Get endpoints
         endpoints = get_endpoints()
