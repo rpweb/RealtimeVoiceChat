@@ -158,6 +158,11 @@ def create_or_update_template(
         variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
     if volume_id:
         variables["input"]["volumeMounts"] = volume_mounts
+    if os.getenv("DOCKERHUB_USERNAME") and os.getenv("DOCKERHUB_PASSWORD"):
+        variables["input"]["dockerCredentials"] = {
+            "username": os.getenv("DOCKERHUB_USERNAME"),
+            "password": os.getenv("DOCKERHUB_PASSWORD")
+        }
     
     for attempt in range(retries):
         try:
@@ -168,7 +173,7 @@ def create_or_update_template(
             ).json()
             if "errors" in response:
                 error_msg = response.get("errors", [{}])[0].get("message", "Unknown error")
-                print(f"Attempt {attempt + 1}/{retries}: Error creating template '{name}': {error_msg}", file=sys.stderr)
+                print(f"Attempt {attempt + 1}/{retries}: Error creating template '{name}': {error_msg}, Full response: {json.dumps(response, indent=2)}", file=sys.stderr)
                 if attempt < retries - 1:
                     sleep(delay)
                     continue
