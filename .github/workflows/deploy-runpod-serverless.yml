@@ -1,16 +1,29 @@
-name: Deploy to RunPod Serverless
+name: Deploy RunPod Serverless Endpoints
 
 on:
   workflow_run:
-    workflows: ["Build and Push Whisper Worker", "Build and Push LLM Worker", "Build and Push TTS Worker"]
+    workflows: ["Build and Push Whisper Worker", "Build and Push TTS Worker", "Build and Push LLM Worker"]
     types:
       - completed
     branches: [main]
   # Allow manual triggering
   workflow_dispatch:
+    inputs:
+      whisper_image:
+        description: 'Whisper Docker image to deploy'
+        required: true
+        type: string
+      tts_image:
+        description: 'TTS Docker image to deploy'
+        required: true
+        type: string
+      llm_image:
+        description: 'LLM Docker image to deploy'
+        required: true
+        type: string
 
 jobs:
-  deploy-to-runpod:
+  deploy:
     runs-on: ubuntu-latest
     # Only run if the triggering workflow was successful (for workflow_run events)
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
@@ -27,149 +40,108 @@ jobs:
         run: |
           pip install runpod requests
 
-      - name: Deploy Whisper Worker and Get Endpoint
-        id: deploy-whisper
+      - name: Deploy Endpoints to RunPod
         run: |
-          # Get the Docker image name from the build workflow
-          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-whisper:latest"
+          # Get the Docker image names from the workflow inputs or build workflows
+          WHISPER_IMAGE="${{ github.event.inputs.whisper_image || format('{0}/realtime-voice-whisper:latest', secrets.DOCKERHUB_USERNAME) }}"
+          TTS_IMAGE="${{ github.event.inputs.tts_image || format('{0}/realtime-voice-tts:latest', secrets.DOCKERHUB_USERNAME) }}"
+          LLM_IMAGE="${{ github.event.inputs.llm_image || format('{0}/realtime-voice-llm:latest', secrets.DOCKERHUB_USERNAME) }}"
           
           # Deploy to RunPod Serverless
-          ENDPOINT_RESPONSE=$(python -c "
+          ENDPOINT_RESPONSE=$(python3 -c '
           import runpod
           import json
           import os
-
+          
           # Initialize RunPod with API key
-          runpod.api_key = '${{ secrets.RUNPOD_API_KEY }}'
-
-          # Check if endpoint already exists
+          runpod.api_key = os.environ["RUNPOD_API_KEY"]
+          
+          # Check existing endpoints
           endpoints = runpod.get_endpoints()
-          whisper_endpoint_id = None
-
+          endpoint_ids = {
+              "whisper": None,
+              "tts": None,
+              "llm": None
+          }
+          
+          # Find existing endpoints
           for endpoint in endpoints:
-              if endpoint.get('name') == 'whisper-worker':
-                  whisper_endpoint_id = endpoint.get('id')
-                  break
-
-          if whisper_endpoint_id:
-              # Update existing endpoint
-              response = runpod.update_endpoint(
-                  endpoint_id=whisper_endpoint_id,
-                  image='$DOCKER_IMAGE',
-                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
-                  name='whisper-worker',
+              name = endpoint.get("name")
+              if name == "whisper-worker":
+                  endpoint_ids["whisper"] = endpoint.get("id")
+              elif name == "tts-worker":
+                  endpoint_ids["tts"] = endpoint.get("id")
+              elif name == "llm-worker":
+                  endpoint_ids["llm"] = endpoint.get("id")
+          
+          responses = {}
+          
+          # Update or create Whisper endpoint
+          if endpoint_ids["whisper"]:
+              responses["whisper"] = runpod.update_endpoint(
+                  endpoint_id=endpoint_ids["whisper"],
+                  docker_image="$WHISPER_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  name="whisper-worker",
                   active=True
               )
           else:
-              # Create new endpoint
-              response = runpod.create_endpoint(
-                  name='whisper-worker',
-                  image='$DOCKER_IMAGE',
-                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
+              responses["whisper"] = runpod.create_endpoint(
+                  name="whisper-worker",
+                  docker_image="$WHISPER_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"]
               )
           
-          print(json.dumps(response))
-          ")
+          # Update or create TTS endpoint
+          if endpoint_ids["tts"]:
+              responses["tts"] = runpod.update_endpoint(
+                  endpoint_id=endpoint_ids["tts"],
+                  docker_image="$TTS_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  name="tts-worker",
+                  active=True
+              )
+          else:
+              responses["tts"] = runpod.create_endpoint(
+                  name="tts-worker",
+                  docker_image="$TTS_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"]
+              )
           
-          # Extract endpoint ID and save it
-          WHISPER_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
+          # Update or create LLM endpoint
+          if endpoint_ids["llm"]:
+              responses["llm"] = runpod.update_endpoint(
+                  endpoint_id=endpoint_ids["llm"],
+                  docker_image="$LLM_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"],
+                  name="llm-worker",
+                  active=True
+              )
+          else:
+              responses["llm"] = runpod.create_endpoint(
+                  name="llm-worker",
+                  docker_image="$LLM_IMAGE",
+                  gpu_ids=["NVIDIA RTX A5000"]
+              )
+          
+          print(json.dumps(responses))
+          ')
+          
+          # Extract endpoint IDs and save them
+          WHISPER_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.whisper.id')
+          TTS_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.tts.id')
+          LLM_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.llm.id')
+          
           echo "Whisper endpoint deployed: $WHISPER_ENDPOINT_ID"
-
-      - name: Deploy LLM Worker and Get Endpoint
-        id: deploy-llm
-        run: |
-          # Get the Docker image name from the build workflow
-          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-llm:latest"
-          
-          # Deploy to RunPod Serverless
-          ENDPOINT_RESPONSE=$(python -c "
-          import runpod
-          import json
-          import os
-
-          # Initialize RunPod with API key
-          runpod.api_key = '${{ secrets.RUNPOD_API_KEY }}'
-
-          # Check if endpoint already exists
-          endpoints = runpod.get_endpoints()
-          llm_endpoint_id = None
-
-          for endpoint in endpoints:
-              if endpoint.get('name') == 'llm-worker':
-                  llm_endpoint_id = endpoint.get('id')
-                  break
-
-          if llm_endpoint_id:
-              # Update existing endpoint
-              response = runpod.update_endpoint(
-                  endpoint_id=llm_endpoint_id,
-                  image='$DOCKER_IMAGE',
-                  gpu_ids=['NVIDIA RTX A6000'],  # Adjust based on your needs
-                  name='llm-worker',
-                  active=True
-              )
-          else:
-              # Create new endpoint
-              response = runpod.create_endpoint(
-                  name='llm-worker',
-                  image='$DOCKER_IMAGE',
-                  gpu_ids=['NVIDIA RTX A6000'],  # Adjust based on your needs
-              )
-          
-          print(json.dumps(response))
-          ")
-          
-          # Extract endpoint ID and save it
-          LLM_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
-          echo "LLM endpoint deployed: $LLM_ENDPOINT_ID"
-
-      - name: Deploy TTS Worker and Get Endpoint
-        id: deploy-tts
-        run: |
-          # Get the Docker image name from the build workflow
-          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-tts:latest"
-          
-          # Deploy to RunPod Serverless
-          ENDPOINT_RESPONSE=$(python -c "
-          import runpod
-          import json
-          import os
-
-          # Initialize RunPod with API key
-          runpod.api_key = '${{ secrets.RUNPOD_API_KEY }}'
-
-          # Check if endpoint already exists
-          endpoints = runpod.get_endpoints()
-          tts_endpoint_id = None
-
-          for endpoint in endpoints:
-              if endpoint.get('name') == 'tts-worker':
-                  tts_endpoint_id = endpoint.get('id')
-                  break
-
-          if tts_endpoint_id:
-              # Update existing endpoint
-              response = runpod.update_endpoint(
-                  endpoint_id=tts_endpoint_id,
-                  image='$DOCKER_IMAGE',
-                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
-                  name='tts-worker',
-                  active=True
-              )
-          else:
-              # Create new endpoint
-              response = runpod.create_endpoint(
-                  name='tts-worker',
-                  image='$DOCKER_IMAGE',
-                  gpu_ids=['NVIDIA RTX A5000'],  # Adjust based on your needs
-              )
-          
-          print(json.dumps(response))
-          ")
-          
-          # Extract endpoint ID and save it
-          TTS_ENDPOINT_ID=$(echo $ENDPOINT_RESPONSE | jq -r '.id')
           echo "TTS endpoint deployed: $TTS_ENDPOINT_ID"
+          echo "LLM endpoint deployed: $LLM_ENDPOINT_ID"
+          
+          # Save endpoint IDs to GitHub environment
+          echo "WHISPER_ENDPOINT_ID=$WHISPER_ENDPOINT_ID" >> $GITHUB_ENV
+          echo "TTS_ENDPOINT_ID=$TTS_ENDPOINT_ID" >> $GITHUB_ENV
+          echo "LLM_ENDPOINT_ID=$LLM_ENDPOINT_ID" >> $GITHUB_ENV
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
 
       - name: Summary
         run: |
