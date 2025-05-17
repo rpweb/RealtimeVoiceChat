@@ -15,23 +15,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
       - name: Deploy to Railway
-        run: |
-          echo "Deploying to Railway..."
-          cd server
-          # Use the official Railway GitHub Action approach
-          railway run --service "${{ secrets.RAILWAY_SERVICE_NAME }}" -- echo "Deployment successful"
+        uses: railway/railway-github-action@v1
+        with:
+          version: latest
+          workingDirectory: server
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
           
       - name: Summary
         run: |
