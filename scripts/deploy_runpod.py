@@ -131,64 +131,142 @@ def create_or_update_template(
                 raise ValueError(f"Template '{name}' has invalid imageName '{current_image}'. Update to '{image_name}' in RunPod console.")
             return template.get("id")
     
-    environment = env_vars or {}
-    container_disk_in_gb = 5
-    volume_mounts = [{"volumeId": volume_id, "mountPath": "/workspace"}] if volume_id else []
+    print(f"Creating new template '{name}' with image '{image_name}'", file=sys.stderr)
     
-    print(f"Creating new template '{name}' with image '{image_name}', env: {environment}, volume: {volume_id}", file=sys.stderr)
+    # First try the SDK method (simpler approach)
+    try:
+        # Create the template with basic settings
+        template = runpod.create_template(
+            name=name,
+            image_name=image_name,
+            is_serverless=True,
+            container_disk_in_gb=5
+        )
+        template_id = template["id"]
+        print(f"Created template with SDK, ID: {template_id}", file=sys.stderr)
+        
+        # If we have env vars or volume, update the template
+        if env_vars or volume_id:
+            print(f"Updating template with env vars and volume", file=sys.stderr)
+            if volume_id:
+                # Update with volume mount
+                try:
+                    # Use GraphQL for volume mounting
+                    mutation = """
+                    mutation ($id: ID!, $input: PodTemplateUpdateInput!) {
+                        podTemplateUpdate(id: $id, input: $input) {
+                            id
+                        }
+                    }
+                    """
+                    variables = {
+                        "id": template_id,
+                        "input": {
+                            "volumeMounts": [{"volumeId": volume_id, "mountPath": "/workspace"}]
+                        }
+                    }
+                    
+                    # Add env vars if present
+                    if env_vars:
+                        variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
+                        
+                    response = requests.post(
+                        "https://api.runpod.io/graphql",
+                        json={"query": mutation, "variables": variables},
+                        headers={"Authorization": f"Bearer {runpod.api_key}"}
+                    ).json()
+                    
+                    if "errors" in response:
+                        print(f"Warning: Error updating template: {json.dumps(response['errors'], indent=2)}", file=sys.stderr)
+                        # Continue anyway since template was created
+                except Exception as update_error:
+                    print(f"Warning: Failed to update template with volume: {update_error}", file=sys.stderr)
+                    # Continue anyway since template was created
+            elif env_vars:
+                # Only update env vars, which the SDK supports directly
+                try:
+                    runpod.update_template(
+                        template_id=template_id,
+                        env=env_vars
+                    )
+                except Exception as env_error:
+                    print(f"Warning: Failed to update template with env vars: {env_error}", file=sys.stderr)
+        
+        return template_id
     
-    mutation = """
-    mutation ($input: PodTemplateInput!) {
-        podTemplateSave(input: $input) {
-            id
-        }
-    }
-    """
-    
-    variables = {
-        "input": {
-            "name": name,
-            "imageName": image_name,
-            "isServerless": True,
-            "containerDiskSizeGB": container_disk_in_gb
-        }
-    }
-    
-    if env_vars:
-        variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
-    if volume_id:
-        variables["input"]["volumeMounts"] = volume_mounts
-    if os.getenv("DOCKERHUB_USERNAME") and os.getenv("DOCKERHUB_PASSWORD"):
-        variables["input"]["dockerCredentials"] = {
-            "username": os.getenv("DOCKERHUB_USERNAME"),
-            "password": os.getenv("DOCKERHUB_PASSWORD")
-        }
-    
-    for attempt in range(retries):
-        try:
-            response = requests.post(
-                "https://api.runpod.io/graphql",
-                json={"query": mutation, "variables": variables},
-                headers={"Authorization": f"Bearer {runpod.api_key}"}
-            ).json()
-            if "errors" in response:
-                error_msg = response.get("errors", [{}])[0].get("message", "Unknown error")
-                print(f"Attempt {attempt + 1}/{retries}: Error creating template '{name}': {error_msg}, Full response: {json.dumps(response, indent=2)}", file=sys.stderr)
+    except Exception as sdk_error:
+        print(f"SDK template creation failed: {sdk_error}, trying GraphQL method", file=sys.stderr)
+        
+        # Fall back to GraphQL method
+        for attempt in range(retries):
+            try:
+                # Prepare GraphQL mutation
+                mutation = """
+                mutation ($input: PodTemplateInput!) {
+                    podTemplateSave(input: $input) {
+                        id
+                    }
+                }
+                """
+                
+                variables = {
+                    "input": {
+                        "name": name,
+                        "imageName": image_name,
+                        "isServerless": True,
+                        "containerDiskSizeGB": 5
+                    }
+                }
+                
+                # Add env vars if present
+                if env_vars:
+                    variables["input"]["env"] = [{"key": k, "value": v} for k, v in env_vars.items()]
+                
+                # Add volume mount if present
+                if volume_id:
+                    variables["input"]["volumeMounts"] = [{"volumeId": volume_id, "mountPath": "/workspace"}]
+                
+                # Try to authenticate with Docker Hub if credentials are available
+                if os.getenv("DOCKERHUB_USERNAME") and os.getenv("DOCKERHUB_PASSWORD"):
+                    variables["input"]["dockerCredentials"] = {
+                        "username": os.getenv("DOCKERHUB_USERNAME"),
+                        "password": os.getenv("DOCKERHUB_PASSWORD")
+                    }
+                
+                # Execute GraphQL mutation
+                response = requests.post(
+                    "https://api.runpod.io/graphql",
+                    json={"query": mutation, "variables": variables},
+                    headers={"Authorization": f"Bearer {runpod.api_key}"}
+                ).json()
+                
+                # Handle errors
+                if "errors" in response:
+                    error_msg = response.get("errors", [{}])[0].get("message", "Unknown error")
+                    print(f"Attempt {attempt + 1}/{retries}: GraphQL error: {error_msg}", file=sys.stderr)
+                    if attempt < retries - 1:
+                        print(f"Retrying in {delay} seconds...", file=sys.stderr)
+                        sleep(delay)
+                        continue
+                    raise Exception(error_msg)
+                
+                # Extract template ID
+                template_id = response.get("data", {}).get("podTemplateSave", {}).get("id")
+                if not template_id:
+                    raise Exception(f"Failed to extract template ID from response: {json.dumps(response, indent=2)}")
+                
+                print(f"Created template with GraphQL, ID: {template_id}", file=sys.stderr)
+                return template_id
+                
+            except Exception as graphql_error:
+                print(f"Attempt {attempt + 1}/{retries}: Error: {graphql_error}", file=sys.stderr)
                 if attempt < retries - 1:
+                    print(f"Retrying in {delay} seconds...", file=sys.stderr)
                     sleep(delay)
                     continue
-                raise Exception(error_msg)
-            template_id = response.get("data", {}).get("podTemplateSave", {}).get("id")
-            if not template_id:
-                raise Exception(f"Failed to create template: {json.dumps(response, indent=2)}")
-            print(f"Created template '{name}' with ID: {template_id}", file=sys.stderr)
-            return template_id
-        except RequestException as e:
-            print(f"Attempt {attempt + 1}/{retries}: Network error creating template '{name}': {e}", file=sys.stderr)
-            if attempt < retries - 1:
-                sleep(delay)
-                continue
-            raise
+                raise Exception(f"Failed to create template after {retries} attempts: {graphql_error}")
+    
+    raise Exception(f"Could not create template for {name} with image {image_name}")
 
 def main():
     """Deploy RunPod serverless endpoints."""
