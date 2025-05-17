@@ -242,7 +242,7 @@ def main():
             raise ValueError("Missing one or more Docker image environment variables")
             
         # Use manually provided volume ID
-        volume_id = "0x80zwh1q1"
+        volume_id = "o5kw0qfkhf"
         print(f"Using existing volume with ID: {volume_id}", file=sys.stderr)
 
         # Validate volume ID
