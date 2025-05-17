@@ -26,7 +26,7 @@ jobs:
       - name: Deploy to Railway
         run: |
           echo "Logging in to Railway..."
-          railway login --token ${{ secrets.RAILWAY_TOKEN }}
+          # Set RAILWAY_TOKEN environment variable is used for authentication
           echo "Deploying server..."
           cd server
           railway up --detach
