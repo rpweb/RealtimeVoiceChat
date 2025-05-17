@@ -64,11 +64,11 @@ export async function GET() {
     
     // Find endpoints by name
     for (const endpoint of endpoints) {
-      if (endpoint.name === 'whisper-worker') {
+      if (endpoint.name === 'whisper_worker') {
         whisperEndpointId = endpoint.id;
-      } else if (endpoint.name === 'llm-worker') {
+      } else if (endpoint.name === 'llm_worker') {
         llmEndpointId = endpoint.id;
-      } else if (endpoint.name === 'tts-worker') {
+      } else if (endpoint.name === 'tts_worker') {
         ttsEndpointId = endpoint.id;
       }
     }

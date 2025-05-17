@@ -258,13 +258,13 @@ def main():
         
         for endpoint in endpoints:
             name = endpoint.get("name", "")
-            if name.startswith("whisper-worker"):
+            if name.startswith("whisper_worker"):
                 endpoint_ids["whisper"] = endpoint.get("id")
                 print(f"Found whisper endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
-            elif name.startswith("tts-worker"):
+            elif name.startswith("tts_worker"):
                 endpoint_ids["tts"] = endpoint.get("id")
                 print(f"Found tts endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
-            elif name.startswith("llm-worker"):
+            elif name.startswith("llm_worker"):
                 endpoint_ids["llm"] = endpoint.get("id")
                 print(f"Found llm endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
 
@@ -292,17 +292,17 @@ def main():
         # Get or create template IDs with environment variables and volume
         template_ids = {
             "whisper": create_or_update_template(
-                "whisper-worker-template", 
+                "whisper_worker-template", 
                 whisper_image, 
                 env_vars=env_vars["whisper"],
             ),
             "tts": create_or_update_template(
-                "tts-worker-template", 
+                "tts_worker-template", 
                 tts_image, 
                 env_vars=env_vars["tts"],
             ),
             "llm": create_or_update_template(
-                "llm-worker-template", 
+                "llm_worker-template", 
                 llm_image, 
                 env_vars=env_vars["llm"],
             )
@@ -311,9 +311,9 @@ def main():
         # Create or update endpoints
         responses = {}
         worker_names = {
-            "whisper": "whisper-worker",
-            "tts": "tts-worker",
-            "llm": "llm-worker"
+            "whisper": "whisper_worker",
+            "tts": "tts_worker",
+            "llm": "llm_worker"
         }
         
         for worker in ["whisper", "tts", "llm"]:

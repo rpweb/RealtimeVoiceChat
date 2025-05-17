@@ -5,7 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'runpod_workers/llm_worker/**'
-      - '.github/workflows/build-llm-worker.yml'
+      - '.github/workflows/build-llm_worker.yml'
   workflow_dispatch:
 
 jobs:

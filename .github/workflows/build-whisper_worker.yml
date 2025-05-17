@@ -1,11 +1,11 @@
-name: Build and Push TTS Worker
+name: Build and Push Whisper Worker
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'runpod_workers/tts_worker/**'
-      - '.github/workflows/build-tts-worker.yml'
+      - 'runpod_workers/whisper_worker/**'
+      - '.github/workflows/build-whisper_worker.yml'
   workflow_dispatch:
 
 jobs:
@@ -27,6 +27,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
-          context: ./runpod_workers/tts_worker
+          context: ./runpod_workers/whisper_worker
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-tts:latest 
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-whisper:latest 

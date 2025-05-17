@@ -59,11 +59,11 @@ export class RunPodService {
       
       // Update endpoints based on their names
       for (const endpoint of endpoints) {
-        if (endpoint.name === 'whisper-worker') {
+        if (endpoint.name === 'whisper_worker') {
           this.whisperEndpointId = endpoint.id;
-        } else if (endpoint.name === 'llm-worker') {
+        } else if (endpoint.name === 'llm_worker') {
           this.llmEndpointId = endpoint.id;
-        } else if (endpoint.name === 'tts-worker') {
+        } else if (endpoint.name === 'tts_worker') {
           this.ttsEndpointId = endpoint.id;
         }
       }
