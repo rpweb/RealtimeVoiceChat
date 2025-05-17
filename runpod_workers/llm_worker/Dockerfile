@@ -1,34 +1,24 @@
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM python:3.10-slim
 
-# Set environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-
-# Install necessary packages
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    python3-dev \
     build-essential \
     wget \
     git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic link for python
-RUN ln -sf /usr/bin/python3 /usr/bin/python
-RUN ln -sf /usr/bin/pip3 /usr/bin/pip
+# Install CUDA - but this would require a CUDA-enabled base image
+# For testing purposes, we'll continue without CUDA to check if runpod works
 
 # Set working directory
 WORKDIR /app
 
-# Install PyTorch directly
-RUN pip install --no-cache-dir torch==2.1.2 --index-url https://download.pytorch.org/whl/cu121
+# Install RunPod first and verify installation
+RUN pip install --no-cache-dir runpod==1.6.0 && \
+    python -c "import runpod; print(f'RunPod version: {runpod.__version__}')"
 
-# Install runpod explicitly first
-RUN pip install --no-cache-dir runpod==1.6.0
-
-# Install Python dependencies with explicit vLLM version
+# Install other dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -39,5 +29,8 @@ COPY schema.py /app/
 # Expose port for API
 EXPOSE 8000
 
-# Start the service
+# Set environment variable to force module path recognition
+ENV PYTHONPATH=/app
+
+# Start the service with explicit Python module path
 CMD ["python", "-m", "runpod.serverless.start"] 
