@@ -80,25 +80,27 @@ jobs:
           
           responses = {}
           
-          # Create or update Whisper endpoint
-          # Create template for Whisper
-          whisper_template = runpod.create_template(
-              name="realtime-voice-template", 
-              image_name="$WHISPER_IMAGE",
-              is_serverless=True
-          )
-          
           # Update or create Whisper endpoint
           if endpoint_ids["whisper"]:
               responses["whisper"] = runpod.update_endpoint(
                   endpoint_id=endpoint_ids["whisper"],
-                  template_id=whisper_template["id"],
+                  template_id=runpod.create_template(
+                      name="whisper-worker-template",
+                      image_name="$WHISPER_IMAGE",
+                      is_serverless=True
+                  )["id"],
                   gpu_ids=["NVIDIA RTX A5000"],
                   name="whisper-worker",
-                  active=True,
-                  workers_max=1
+                  active=True
               )
           else:
+              # Create template first
+              whisper_template = runpod.create_template(
+                  name="whisper-worker-template",
+                  image_name="$WHISPER_IMAGE",
+                  is_serverless=True
+              )
+              # Use template ID to create endpoint
               responses["whisper"] = runpod.create_endpoint(
                   name="whisper-worker",
                   template_id=whisper_template["id"],
@@ -106,24 +108,27 @@ jobs:
                   workers_max=1
               )
           
-          # Create template for TTS
-          tts_template = runpod.create_template(
-              name="realtime-voice-template", 
-              image_name="$TTS_IMAGE",
-              is_serverless=True
-          )
-          
           # Update or create TTS endpoint
           if endpoint_ids["tts"]:
               responses["tts"] = runpod.update_endpoint(
                   endpoint_id=endpoint_ids["tts"],
-                  template_id=tts_template["id"],
+                  template_id=runpod.create_template(
+                      name="tts-worker-template",
+                      image_name="$TTS_IMAGE",
+                      is_serverless=True
+                  )["id"],
                   gpu_ids=["NVIDIA RTX A5000"],
                   name="tts-worker",
-                  active=True,
-                  workers_max=1
+                  active=True
               )
           else:
+              # Create template first
+              tts_template = runpod.create_template(
+                  name="tts-worker-template",
+                  image_name="$TTS_IMAGE",
+                  is_serverless=True
+              )
+              # Use template ID to create endpoint
               responses["tts"] = runpod.create_endpoint(
                   name="tts-worker",
                   template_id=tts_template["id"],
@@ -131,24 +136,27 @@ jobs:
                   workers_max=1
               )
           
-          # Create template for LLM
-          llm_template = runpod.create_template(
-              name="realtime-voice-template", 
-              image_name="$LLM_IMAGE",
-              is_serverless=True
-          )
-          
           # Update or create LLM endpoint
           if endpoint_ids["llm"]:
               responses["llm"] = runpod.update_endpoint(
                   endpoint_id=endpoint_ids["llm"],
-                  template_id=llm_template["id"],
+                  template_id=runpod.create_template(
+                      name="llm-worker-template",
+                      image_name="$LLM_IMAGE",
+                      is_serverless=True
+                  )["id"],
                   gpu_ids=["NVIDIA RTX A5000"],
                   name="llm-worker",
-                  active=True,
-                  workers_max=1
+                  active=True
               )
           else:
+              # Create template first
+              llm_template = runpod.create_template(
+                  name="llm-worker-template",
+                  image_name="$LLM_IMAGE",
+                  is_serverless=True
+              )
+              # Use template ID to create endpoint
               responses["llm"] = runpod.create_endpoint(
                   name="llm-worker",
                   template_id=llm_template["id"],
