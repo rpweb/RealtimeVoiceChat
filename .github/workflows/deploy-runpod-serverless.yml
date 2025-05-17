@@ -84,7 +84,7 @@ jobs:
           if endpoint_ids["whisper"]:
               responses["whisper"] = runpod.update_endpoint(
                   endpoint_id=endpoint_ids["whisper"],
-                  image="$WHISPER_IMAGE",
+                  docker_image="$WHISPER_IMAGE",
                   gpu_ids=["NVIDIA RTX A5000"],
                   name="whisper-worker",
                   active=True
@@ -92,7 +92,7 @@ jobs:
           else:
               responses["whisper"] = runpod.create_endpoint(
                   name="whisper-worker",
-                  image="$WHISPER_IMAGE",
+                  docker_image="$WHISPER_IMAGE",
                   gpu_ids=["NVIDIA RTX A5000"]
               )
           
@@ -100,7 +100,7 @@ jobs:
           if endpoint_ids["tts"]:
               responses["tts"] = runpod.update_endpoint(
                   endpoint_id=endpoint_ids["tts"],
-                  image="$TTS_IMAGE",
+                  docker_image="$TTS_IMAGE",
                   gpu_ids=["NVIDIA RTX A5000"],
                   name="tts-worker",
                   active=True
@@ -108,7 +108,7 @@ jobs:
           else:
               responses["tts"] = runpod.create_endpoint(
                   name="tts-worker",
-                  image="$TTS_IMAGE",
+                  docker_image="$TTS_IMAGE",
                   gpu_ids=["NVIDIA RTX A5000"]
               )
           
@@ -116,7 +116,7 @@ jobs:
           if endpoint_ids["llm"]:
               responses["llm"] = runpod.update_endpoint(
                   endpoint_id=endpoint_ids["llm"],
-                  image="$LLM_IMAGE",
+                  docker_image="$LLM_IMAGE",
                   gpu_ids=["NVIDIA RTX A5000"],
                   name="llm-worker",
                   active=True
@@ -124,7 +124,7 @@ jobs:
           else:
               responses["llm"] = runpod.create_endpoint(
                   name="llm-worker",
-                  image="$LLM_IMAGE",
+                  docker_image="$LLM_IMAGE",
                   gpu_ids=["NVIDIA RTX A5000"]
               )
           
