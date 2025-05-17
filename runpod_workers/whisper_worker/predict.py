@@ -1,7 +1,11 @@
 import os
-import torch
+import time
 import numpy as np
-from typing import Dict, List, Optional, Union, Any
+from io import BytesIO
+from typing import Dict, List, Any, Optional, Union
+import torch
+import whisper
+import base64
 from faster_whisper import WhisperModel
 
 class WhisperTranscriber:
@@ -12,11 +16,21 @@ class WhisperTranscriber:
         Args:
             model: The name of the Whisper model to use
         """
+        # Get GPU device from environment (useful for multi-GPU setups)
+        device_id = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.compute_type = "float16" if self.device == "cuda" else "float32"
         
-        print(f"Loading model {model} on {self.device}...")
-        self.model = WhisperModel(model, device=self.device, compute_type=self.compute_type)
+        # Get model path from environment variable or use default cache
+        model_path = os.environ.get("MODEL_PATH", None)
+        if model_path:
+            print(f"Using custom model path: {model_path}")
+            # If using custom path, ensure it exists
+            os.makedirs(model_path, exist_ok=True)
+            os.environ["WHISPER_CACHE"] = model_path
+        
+        print(f"Loading model {model} on {self.device} (device {device_id})...")
+        self.model = WhisperModel(model, device=self.device, compute_type=self.compute_type, download_root=model_path)
         print("Model loaded successfully")
     
     def transcribe(

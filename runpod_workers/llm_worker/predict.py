@@ -18,18 +18,32 @@ class LLMGenerator:
         self.model_id = model_id
         print(f"Loading model {model_id}...")
         
+        # Get GPU configuration from environment
+        gpu_count = int(os.environ.get("GPU_COUNT", torch.cuda.device_count()))
+        gpu_memory_utilization = float(os.environ.get("GPU_MEMORY_UTILIZATION", 0.7))
+        
+        # Get model storage path - defaults to huggingface cache location
+        # You can set MODEL_PATH in RunPod to use a persistent volume
+        model_path = os.environ.get("MODEL_PATH", None)
+        if model_path:
+            print(f"Using custom model path: {model_path}")
+            # If using custom path, ensure it exists
+            os.makedirs(model_path, exist_ok=True)
+            os.environ["TRANSFORMERS_CACHE"] = model_path
+            os.environ["HF_HOME"] = model_path
+        
         # Initialize vLLM engine with optimized settings for smaller models
         self.llm = LLM(
             model=model_id,
-            tensor_parallel_size=torch.cuda.device_count(),
-            gpu_memory_utilization=0.7,  # Lower memory usage for smaller models
+            tensor_parallel_size=gpu_count,
+            gpu_memory_utilization=gpu_memory_utilization,
             trust_remote_code=True
         )
         
         # Load tokenizer for token counting
         self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
         
-        print(f"Model {model_id} loaded successfully")
+        print(f"Model {model_id} loaded successfully using {gpu_count} GPUs")
     
     def _format_chat_messages(self, messages: List[Dict[str, str]]) -> str:
         """

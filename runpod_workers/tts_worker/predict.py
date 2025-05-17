@@ -13,18 +13,34 @@ class TTSProcessor:
         """
         Initialize the TTSProcessor with Piper TTS models
         """
-        self.models_dir = os.path.join(os.getcwd(), "models")
+        # Get model path from environment or use default
+        self.models_dir = os.environ.get("MODEL_PATH", os.path.join(os.getcwd(), "models"))
+        print(f"Using models directory: {self.models_dir}")
+        
+        # Ensure the models directory exists
+        os.makedirs(self.models_dir, exist_ok=True)
         
         # Load available models
         self.available_voices = {
             "lessac": os.path.join(self.models_dir, "en_US-lessac-medium.onnx")
         }
         
+        # Check for additional voice models specified in environment
+        additional_models_dir = os.environ.get("ADDITIONAL_MODELS_DIR", None)
+        if additional_models_dir:
+            print(f"Scanning additional models directory: {additional_models_dir}")
+            if os.path.exists(additional_models_dir):
+                for file in os.listdir(additional_models_dir):
+                    if file.endswith(".onnx"):
+                        voice_name = file.split('.')[0]
+                        self.available_voices[voice_name] = os.path.join(additional_models_dir, file)
+                        print(f"Found additional voice model: {voice_name}")
+        
         # Load default voice
-        self.default_voice = "lessac"
+        self.default_voice = os.environ.get("DEFAULT_VOICE", "lessac")
         self.voice_instances = {}
         
-        print("TTS processor initialized with Piper TTS")
+        print(f"TTS processor initialized with Piper TTS. Available voices: {list(self.available_voices.keys())}")
     
     def _get_voice_instance(self, voice_name: str) -> PiperVoice:
         """
