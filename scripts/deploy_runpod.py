@@ -175,14 +175,20 @@ def main():
         endpoints = get_endpoints()
         endpoint_ids = {"whisper": None, "tts": None, "llm": None}
         
+        print(f"Found existing endpoints: {[e.get('name') for e in endpoints]}", file=sys.stderr)
+        
         for endpoint in endpoints:
-            name = endpoint.get("name")
-            if name == "whisper-worker":
+            name = endpoint.get("name", "")
+            # More flexible matching to handle any suffixes (-fb, etc.)
+            if name.startswith("whisper-worker"):
                 endpoint_ids["whisper"] = endpoint.get("id")
-            elif name == "tts-worker":
+                print(f"Found whisper endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
+            elif name.startswith("tts-worker"):
                 endpoint_ids["tts"] = endpoint.get("id")
-            elif name == "llm-worker":
+                print(f"Found tts endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
+            elif name.startswith("llm-worker"):
                 endpoint_ids["llm"] = endpoint.get("id")
+                print(f"Found llm endpoint: {name} with ID: {endpoint.get('id')}", file=sys.stderr)
 
         # Define environment variables for each worker
         env_vars = {
@@ -229,8 +235,14 @@ def main():
 
         # Create or update endpoints
         responses = {}
+        worker_names = {
+            "whisper": "whisper-worker-fb",  # Fixed suffix to match existing endpoints
+            "tts": "tts-worker-fb",          # Fixed suffix to match existing endpoints
+            "llm": "llm-worker-fb"           # Fixed suffix to match existing endpoints
+        }
+        
         for worker in ["whisper", "tts", "llm"]:
-            worker_name = f"{worker}-worker"
+            worker_name = worker_names[worker]  # Use the fixed name with suffix
             template_id = template_ids[worker]
             endpoint_id = endpoint_ids[worker]
             try:
@@ -247,7 +259,7 @@ def main():
                         # TTS can run on CPU
                         gpu_type = "CPU" 
                     responses[worker] = runpod.create_endpoint(
-                        name=worker_name,
+                        name=worker_name,  # Use fixed name
                         template_id=template_id,
                         gpu_ids=[gpu_type],
                         workers_max=1,      # Only 1 worker for testing purposes
