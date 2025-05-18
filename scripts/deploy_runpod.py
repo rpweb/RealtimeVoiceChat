@@ -280,7 +280,7 @@ def main():
                 "DEFAULT_VOICE": "lessac"
             },
             "llm": {
-                "MODEL_ID": "mistralai/Mistral-7B-Instruct-v0.3",
+                "MODEL_ID": "mistralai/Mistral-7B-Instruct-v0.2",
                 "MODEL_PATH": "/workspace/models",
                 "GPU_COUNT": "1",
                 "GPU_MEMORY_UTILIZATION": "0.85",
