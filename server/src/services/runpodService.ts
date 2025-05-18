@@ -56,14 +56,16 @@ export class RunPodService {
       });
       
       const endpoints = response.data.data?.myself?.endpoints || [];
+
+      console.log('RunPod endpoints:', endpoints);
       
       // Update endpoints based on their names
       for (const endpoint of endpoints) {
-        if (endpoint.name === 'whisper_worker') {
+        if (endpoint.name === 'whisper') {
           this.whisperEndpointId = endpoint.id;
-        } else if (endpoint.name === 'llm_worker') {
+        } else if (endpoint.name === 'llm') {
           this.llmEndpointId = endpoint.id;
-        } else if (endpoint.name === 'tts_worker') {
+        } else if (endpoint.name === 'tts') {
           this.ttsEndpointId = endpoint.id;
         }
       }
