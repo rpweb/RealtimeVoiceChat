@@ -1,5 +1,6 @@
 runpod==1.6.0
 faster-whisper==0.10.0
+openai-whisper==20231117
 pydub==0.25.1
 numpy>=1.22.0
 torch>=2.0.0
