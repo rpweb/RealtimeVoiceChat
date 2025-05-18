@@ -1,5 +1,8 @@
 FROM python:3.10-slim
 
+# Add build argument for Hugging Face token
+ARG HUGGINGFACE_API_KEY
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -17,6 +20,10 @@ WORKDIR /app
 # Install RunPod first and verify installation
 RUN pip install --no-cache-dir runpod==1.6.0 && \
     python -c "import runpod; print(f'RunPod version: {runpod.__version__}')"
+
+# Install and configure Hugging Face CLI
+RUN pip install --no-cache-dir huggingface_hub && \
+    huggingface-cli login --token $HUGGINGFACE_API_KEY
 
 # Install other dependencies
 COPY requirements.txt .

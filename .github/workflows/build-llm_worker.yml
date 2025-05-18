@@ -29,4 +29,6 @@ jobs:
         with:
           context: ./runpod_workers/llm_worker
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-llm:latest 
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-llm:latest
+          build-args: |
+            HUGGINGFACE_API_KEY=${{ secrets.HUGGINGFACE_API_KEY }} 
