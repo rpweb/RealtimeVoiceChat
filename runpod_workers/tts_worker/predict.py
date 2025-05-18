@@ -143,25 +143,27 @@ class TTSProcessor:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
                 wav_path = temp_wav.name
             
-            # Synthesize speech to the temporary WAV file
-            voice_instance.synthesize(text, wav_path)
-            
-            # Load the generated WAV file
-            audio_segment = AudioSegment.from_wav(wav_path)
-            
-            # Delete the temporary file after loading
-            os.unlink(wav_path)
-            
-            # Apply speed adjustment if needed
-            if speed != 1.0:
-                audio_segment = audio_segment.speedup(playback_speed=speed)
-            
-            # Convert to in-memory audio file
-            audio_buffer = io.BytesIO()
-            
-            # Export to the desired format
-            audio_segment.export(audio_buffer, format=format)
-            audio_buffer.seek(0)
+            try:
+                # Synthesize speech to the temporary WAV file
+                voice_instance.synthesize(text, wav_path)
+                
+                # Load the generated WAV file
+                audio_segment = AudioSegment.from_file(wav_path, format="wav")
+                
+                # Apply speed adjustment if needed
+                if speed != 1.0:
+                    audio_segment = audio_segment.speedup(playback_speed=speed)
+                
+                # Convert to in-memory audio file
+                audio_buffer = io.BytesIO()
+                
+                # Export to the desired format
+                audio_segment.export(audio_buffer, format=format)
+                audio_buffer.seek(0)
+            finally:
+                # Always clean up the temporary file
+                if os.path.exists(wav_path):
+                    os.unlink(wav_path)
             
             if response_format == "base64":
                 # Encode audio data as base64
