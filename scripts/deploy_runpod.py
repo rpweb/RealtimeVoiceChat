@@ -139,7 +139,7 @@ def create_or_update_template(
             name=name,
             image_name=image_name,
             is_serverless=True,
-            container_disk_in_gb=25
+            container_disk_in_gb=50
         )
         template_id = template["id"]
         print(f"Created template with SDK, ID: {template_id}", file=sys.stderr)
@@ -178,7 +178,7 @@ def create_or_update_template(
                         "name": name,
                         "imageName": image_name,
                         "isServerless": True,
-                        "containerDiskSizeGB": 5
+                        "containerDiskSizeGB": 50
                     }
                 }
                 
