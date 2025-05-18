@@ -2,7 +2,7 @@ INPUT_SCHEMA = {
     "prompt": {
         "type": "string",
         "description": "Input text for the LLM to complete",
-        "required": True
+        "required": False
     },
     "messages": {
         "type": "array",

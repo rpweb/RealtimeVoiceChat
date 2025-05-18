@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
+import { formatDataStreamPart } from 'ai';
 
 // Configure the backend service URL
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -12,10 +13,11 @@ export async function POST(req: NextRequest) {
     // Get the last message which is from the user
     const lastMessage = messages[messages.length - 1];
     
-    // Forward the request to our backend
+    // Forward the full messages array to our backend instead of just the last message
     const response = await axios.post(`${BACKEND_URL}/api/chat/message`, {
       sessionId: sessionId || `session-${Date.now()}`,
-      message: lastMessage.content
+      message: lastMessage.content,
+      messages: messages // Include full message history for context
     });
     
     // Get the assistant's response
@@ -25,31 +27,36 @@ export async function POST(req: NextRequest) {
       throw new Error('No response from assistant');
     }
     
-    // Create a custom streaming response
+    // Create a ReadableStream that formats each chunk according to the AI protocol
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
-      start(controller) {
+      async start(controller) {
         // Send the text in chunks to simulate streaming
         const text = assistantMessage.content;
         const chunks = text.match(/.{1,20}/g) || [];
         
-        let index = 0;
-        const interval = setInterval(() => {
-          if (index < chunks.length) {
-            controller.enqueue(encoder.encode(chunks[index]));
-            index++;
-          } else {
-            clearInterval(interval);
-            controller.close();
-          }
-        }, 100);
+        // Use for...of loop with setTimeout for better async handling
+        for (const chunk of chunks) {
+          // Add a small delay to simulate streaming
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          // Format according to the Vercel AI SDK protocol (type 0 is text)
+          const formattedChunk = formatDataStreamPart("text", chunk);
+          controller.enqueue(encoder.encode(formattedChunk));
+        }
+        
+        // Signal the end of the stream
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
       }
     });
     
-    // Return the streaming response
+    // Return the stream as a Response object
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
       }
     });
   } catch (error) {

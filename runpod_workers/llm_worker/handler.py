@@ -23,10 +23,16 @@ def handler(job):
     try:
         print(f"[DEBUG] Processing job input: {job_input}")
         
+        # Check if we have messages (Vercel AI SDK format)
+        messages = job_input.get("messages", [])
+        
+        # Get prompt if provided
         prompt = job_input.get("prompt", "")
-        if not prompt:
-            print("[DEBUG] No prompt provided")
-            return {"error": "No prompt provided. Please include a 'prompt' field."}
+        
+        # Ensure we have either messages or a prompt
+        if not messages and not prompt:
+            print("[DEBUG] No prompt or messages provided")
+            return {"error": "No prompt or messages provided. Please include either 'prompt' or 'messages' field."}
         
         # Get parameters for the LLM
         temperature = job_input.get("temperature", 0.7)
@@ -37,9 +43,6 @@ def handler(job):
         presence_penalty = job_input.get("presence_penalty", 0.0)
         frequency_penalty = job_input.get("frequency_penalty", 0.0)
         stop_sequences = job_input.get("stop", [])
-        
-        # Extract conversation history if provided
-        messages = job_input.get("messages", [])
         
         # Process the request
         if messages:
@@ -82,6 +85,7 @@ def handler(job):
         return result
     
     except Exception as e:
+        print(f"[ERROR] Exception in handler: {str(e)}")
         return {"error": str(e)}
 
 # Start the runpod handler
