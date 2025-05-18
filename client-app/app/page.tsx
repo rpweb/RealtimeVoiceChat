@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { useChat, Message as AIMessage } from 'ai/react';
+import { useChat, Message as AIMessage } from '@ai-sdk/react';
 import { io, Socket } from 'socket.io-client';
 import dynamic from 'next/dynamic';
 import ChatMessages from '@/components/ChatMessages';
@@ -31,7 +31,7 @@ export default function Home() {
   const [endpointsReady, setEndpointsReady] = useState(false);
   
   // Using Vercel AI SDK useChat for chat functionality
-  const { messages, input, handleInputChange, handleSubmit, setMessages, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, setMessages, status } = useChat({
     api: '/api/chat',
     body: { sessionId },
     onResponse: (response) => {
@@ -330,11 +330,11 @@ export default function Home() {
                 onChange={handleInputChange}
                 placeholder="Type your message..."
                 className="flex-1 p-2 border border-gray-300 rounded"
-                disabled={isLoading || isProcessing}
+                disabled={status === 'streaming' || isProcessing}
               />
               <button
                 type="submit"
-                disabled={isLoading || isProcessing || !input.trim()}
+                disabled={status === 'streaming' || isProcessing || !input.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400"
               >
                 Send

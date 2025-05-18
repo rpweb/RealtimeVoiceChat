@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { formatDataStreamPart } from 'ai';
 
 // Configure the backend service URL
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -27,37 +26,14 @@ export async function POST(req: NextRequest) {
       throw new Error('No response from assistant');
     }
     
-    // Create a ReadableStream that formats each chunk according to the AI protocol
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        // Send the text in chunks to simulate streaming
-        const text = assistantMessage.content;
-        const chunks = text.match(/.{1,20}/g) || [];
-        
-        // Use for...of loop with setTimeout for better async handling
-        for (const chunk of chunks) {
-          // Add a small delay to simulate streaming
-          await new Promise(resolve => setTimeout(resolve, 50));
-          
-          // Format according to the Vercel AI SDK protocol (type 0 is text)
-          const formattedChunk = formatDataStreamPart("text", chunk);
-          controller.enqueue(encoder.encode(formattedChunk));
-        }
-        
-        // Signal the end of the stream
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        controller.close();
-      }
-    });
+    // Get the full text and return it immediately - no streaming for now
+    const text = assistantMessage.content;
     
-    // Return the stream as a Response object
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-      }
+    // Return the AI response as a JSON object
+    return NextResponse.json({
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: text
     });
   } catch (error) {
     console.error('Error in chat API:', error);
