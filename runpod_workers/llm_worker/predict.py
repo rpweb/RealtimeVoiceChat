@@ -8,7 +8,7 @@ from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 
 class LLMGenerator:
-    def __init__(self, model_id: str = "meta-llama/Meta-Llama-3-8B-Instruct"):
+    def __init__(self, model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"):
         """
         Initialize the LLM generator with a specified model
         
@@ -31,13 +31,16 @@ class LLMGenerator:
             os.makedirs(model_path, exist_ok=True)
             os.environ["TRANSFORMERS_CACHE"] = model_path
             os.environ["HF_HOME"] = model_path
+
+        hg_token = os.environ.get("HUGGINGFACE_API_KEY", None)
         
         # Initialize vLLM engine with optimized settings for smaller models
         self.llm = LLM(
             model=model_id,
             tensor_parallel_size=gpu_count,
             gpu_memory_utilization=gpu_memory_utilization,
-            trust_remote_code=True
+            trust_remote_code=True,
+            token=hg_token
         )
         
         # Load tokenizer for token counting

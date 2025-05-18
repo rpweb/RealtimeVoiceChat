@@ -139,7 +139,7 @@ def create_or_update_template(
             name=name,
             image_name=image_name,
             is_serverless=True,
-            container_disk_in_gb=5
+            container_disk_in_gb=25
         )
         template_id = template["id"]
         print(f"Created template with SDK, ID: {template_id}", file=sys.stderr)
@@ -280,13 +280,13 @@ def main():
                 "DEFAULT_VOICE": "lessac"
             },
             "llm": {
-                "MODEL_ID": "meta-llama/Meta-Llama-3-8B-Instruct",
+                "MODEL_ID": "mistralai/Mistral-7B-Instruct-v0.3",
                 "MODEL_PATH": "/workspace/models",
                 "GPU_COUNT": "1",
                 "GPU_MEMORY_UTILIZATION": "0.85",
                 "CACHE_DIR": "/workspace/models/cache",
                 "PRELOAD_MODEL": "true",
-                "HUGGINGFACE_TOKEN": os.getenv("HUGGINGFACE_API_KEY", "")
+                "HUGGINGFACE_API_KEY": os.getenv("HUGGINGFACE_API_KEY", "")
             }
         }
 
@@ -336,7 +336,7 @@ def main():
                     responses[worker] = runpod.create_endpoint(
                         name=worker_name,
                         template_id=template_id,
-                        network_volume_id=volume_id,
+                        # network_volume_id=volume_id,
                         gpu_ids=gpu_type,
                         workers_max=1,
                         workers_min=0,
