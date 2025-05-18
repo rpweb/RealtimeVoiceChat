@@ -8,7 +8,7 @@ from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 
 class LLMGenerator:
-    def __init__(self, model_id: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"):
+    def __init__(self, model_id: str = "meta-llama/Meta-Llama-3-8B-Instruct"):
         """
         Initialize the LLM generator with a specified model
         

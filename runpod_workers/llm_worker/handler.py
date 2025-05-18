@@ -7,7 +7,7 @@ from predict import LLMGenerator
 
 # Initialize the LLM generator with pre-loaded model
 # Using TinyLlama for testing as it's only ~2GB and initializes quickly
-model_id = os.environ.get("MODEL_ID", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+model_id = os.environ.get("MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
 llm_generator = LLMGenerator(model_id=model_id)
     
 def handler(job):
