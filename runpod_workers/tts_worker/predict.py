@@ -104,22 +104,25 @@ class TTSProcessor:
             voice_instance = self._get_voice_instance(voice)
             
             # Generate speech using Piper TTS
-            audio_data, sample_rate = voice_instance.synthesize(text)
+            # Create a temporary file for the WAV output
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+                wav_path = temp_wav.name
             
-            # Convert to in-memory audio file
-            audio_buffer = io.BytesIO()
+            # Synthesize speech to the temporary WAV file
+            voice_instance.synthesize(text, wav_path)
             
-            # Create an AudioSegment from the raw audio data
-            audio_segment = AudioSegment(
-                data=audio_data.tobytes(),
-                sample_width=2,  # 16-bit audio
-                frame_rate=sample_rate,
-                channels=1,  # mono
-            )
+            # Load the generated WAV file
+            audio_segment = AudioSegment.from_wav(wav_path)
+            
+            # Delete the temporary file after loading
+            os.unlink(wav_path)
             
             # Apply speed adjustment if needed
             if speed != 1.0:
                 audio_segment = audio_segment.speedup(playback_speed=speed)
+            
+            # Convert to in-memory audio file
+            audio_buffer = io.BytesIO()
             
             # Export to the desired format
             audio_segment.export(audio_buffer, format=format)
