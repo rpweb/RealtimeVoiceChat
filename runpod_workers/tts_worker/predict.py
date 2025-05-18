@@ -4,11 +4,9 @@ import tempfile
 import io
 from typing import Dict, Any, Optional, List
 import json
-import numpy as np
 from piper import PiperVoice
 from pydub import AudioSegment
 import urllib.request
-import logging
 
 class TTSProcessor:
     def __init__(self):

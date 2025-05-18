@@ -1,11 +1,7 @@
 import os
-import time
-import numpy as np
-from io import BytesIO
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 import torch
 import whisper
-import base64
 from faster_whisper import WhisperModel
 
 class WhisperTranscriber:
