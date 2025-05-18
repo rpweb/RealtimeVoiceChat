@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     // First try to get endpoints from our backend server
-    const BACKEND_URL = process.env.BACKEND_URL || 'https://your-railway-server.railway.app';
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
     
     try {
       const backendResponse = await fetch(`${BACKEND_URL}/api/endpoints`, { 

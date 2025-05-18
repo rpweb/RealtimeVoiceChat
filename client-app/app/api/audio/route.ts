@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
 // Configure the backend service URL
-const BACKEND_URL = process.env.BACKEND_URL || 'https://your-railway-server.railway.app';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 // Handle audio transcription
 export async function POST(req: NextRequest) {

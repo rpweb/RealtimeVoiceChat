@@ -14,7 +14,7 @@ const AudioRecorder = dynamic(() => import('@/components/AudioRecorder'), {
 });
 
 // Backend service URL
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://your-railway-server.railway.app';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export default function Home() {
   // State for session management
@@ -139,15 +139,19 @@ export default function Home() {
         };
         
         // Update messages with the new response
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage && lastMessage.role === 'assistant') {
-          // Replace the last message
-          const updatedMessages = [...messages.slice(0, -1), newMessage];
-          setMessages(updatedMessages);
-        } else {
-          // Add as a new message
-          setMessages([...messages, newMessage]);
-        }
+        setMessages((prevMessages) => {
+          // Check if this is an update to an existing message
+          const lastMessage = prevMessages[prevMessages.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            // Clone the messages array without the last message
+            const updatedMessages = prevMessages.slice(0, -1);
+            // Add the updated message
+            return [...updatedMessages, newMessage];
+          }
+          
+          // Otherwise add as a new message
+          return [...prevMessages, newMessage];
+        });
       }
     });
     

@@ -14,7 +14,7 @@ interface ApiConfig {
   ttsEndpointId: string;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://your-railway-server.railway.app';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 // Store the current configuration
 let currentConfig: ApiConfig = {

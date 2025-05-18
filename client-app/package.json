@@ -3,33 +3,33 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@types/uuid": "^10.0.0",
-    "axios": "^1.6.2",
-    "next": "^14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "axios": "^1.9.0",
+    "next": "^15.3.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "react-icons": "^5.5.0",
     "react-media-recorder": "^1.7.1",
-    "uuid": "^9.0.1",
-    "ai": "^2.2.25",
-    "socket.io-client": "^4.7.2",
-    "openai": "^4.20.0"
+    "uuid": "^11.1.0",
+    "ai": "^4.3.16",
+    "socket.io-client": "^4.8.1",
+    "openai": "^4.100.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
+    "@tailwindcss/postcss": "^4.1.7",
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.27.0",
     "eslint-config-next": "15.3.2",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "tailwindcss": "^4.1.7",
+    "typescript": "^5.8.3"
   }
 }

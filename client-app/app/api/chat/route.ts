@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Message as VercelAIMessage, StreamingTextResponse, experimental_StreamData } from 'ai';
 import axios from 'axios';
 
 // Configure the backend service URL
-const BACKEND_URL = process.env.BACKEND_URL || 'https://your-railway-server.railway.app';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,38 +12,46 @@ export async function POST(req: NextRequest) {
     // Get the last message which is from the user
     const lastMessage = messages[messages.length - 1];
     
-    // Meta information
-    const data = new experimental_StreamData();
-    
-    // Forward the request to our Railway backend
+    // Forward the request to our backend
     const response = await axios.post(`${BACKEND_URL}/api/chat/message`, {
       sessionId: sessionId || `session-${Date.now()}`,
       message: lastMessage.content
     });
     
-    // Create a ReadableStream that sends the response gradually
-    // This is a simplified example; in reality we'd stream the response
+    // Get the assistant's response
+    const assistantMessage = response.data.messages[response.data.messages.length - 1];
+    
+    if (!assistantMessage || !assistantMessage.content) {
+      throw new Error('No response from assistant');
+    }
+    
+    // Create a custom streaming response
+    const encoder = new TextEncoder();
     const stream = new ReadableStream({
-      async start(controller) {
-        const assistantMessage = response.data.messages[response.data.messages.length - 1];
+      start(controller) {
+        // Send the text in chunks to simulate streaming
+        const text = assistantMessage.content;
+        const chunks = text.match(/.{1,20}/g) || [];
         
-        if (assistantMessage && assistantMessage.content) {
-          // Instead of sending all at once, we would stream it in a real implementation
-          controller.enqueue(assistantMessage.content);
-        }
-        
-        // Add metadata about the session
-        data.append({ 
-          sessionId: response.data.sessionId || sessionId,
-          audioAvailable: Boolean(assistantMessage?.audioUrl)
-        });
-        
-        controller.close();
+        let index = 0;
+        const interval = setInterval(() => {
+          if (index < chunks.length) {
+            controller.enqueue(encoder.encode(chunks[index]));
+            index++;
+          } else {
+            clearInterval(interval);
+            controller.close();
+          }
+        }, 100);
       }
     });
     
-    // Return a StreamingTextResponse, which will stream the response to the client
-    return new StreamingTextResponse(stream, {}, data);
+    // Return the streaming response
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      }
+    });
   } catch (error) {
     console.error('Error in chat API:', error);
     return NextResponse.json(
