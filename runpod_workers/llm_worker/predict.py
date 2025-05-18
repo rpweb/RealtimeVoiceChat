@@ -39,12 +39,15 @@ class LLMGenerator:
             model=model_id,
             tensor_parallel_size=gpu_count,
             gpu_memory_utilization=gpu_memory_utilization,
-            trust_remote_code=True,
-            token=hg_token
+            trust_remote_code=True
         )
         
         # Load tokenizer for token counting
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_id,
+            trust_remote_code=True,
+            token=hg_token
+        )
         
         print(f"Model {model_id} loaded successfully using {gpu_count} GPUs")
     
