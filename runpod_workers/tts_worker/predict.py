@@ -7,6 +7,7 @@ import json
 from piper import PiperVoice
 from pydub import AudioSegment
 import urllib.request
+import subprocess
 
 class TTSProcessor:
     def __init__(self):
@@ -139,56 +140,82 @@ class TTSProcessor:
             voice_instance = self._get_voice_instance(voice)
             
             # Generate speech using Piper TTS
-            # Create a temporary file for the WAV output
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
-                wav_path = temp_wav.name
+            # Create temporary files for WAV input/output
+            temp_wav_path = None
+            temp_output_path = None
             
             try:
-                # Synthesize speech to the temporary WAV file
-                voice_instance.synthesize(text, wav_path)
+                # Create a temporary file for Piper output
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+                    temp_wav_path = temp_wav.name
                 
-                # Load the generated WAV file
-                audio_segment = AudioSegment.from_file(wav_path, format="wav")
+                # Synthesize speech using Piper
+                print(f"Synthesizing speech to {temp_wav_path}")
+                voice_instance.synthesize(text, temp_wav_path)
                 
-                # Apply speed adjustment if needed
-                if speed != 1.0:
-                    audio_segment = audio_segment.speedup(playback_speed=speed)
+                # Verify the file exists and has content
+                if not os.path.exists(temp_wav_path) or os.path.getsize(temp_wav_path) == 0:
+                    raise Exception(f"Piper failed to generate audio file at {temp_wav_path}")
                 
-                # Convert to in-memory audio file
-                audio_buffer = io.BytesIO()
+                print(f"Generated audio file size: {os.path.getsize(temp_wav_path)} bytes")
                 
-                # Export to the desired format
-                audio_segment.export(audio_buffer, format=format)
-                audio_buffer.seek(0)
+                # Create a temporary output file for the desired format
+                with tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False) as temp_out:
+                    temp_output_path = temp_out.name
+                
+                # Use ffmpeg directly to convert the file and apply speed adjustment
+                speed_filter = f",atempo={speed}" if speed != 1.0 else ""
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", temp_wav_path,
+                    "-filter:a", f"aresample=44100{speed_filter}",
+                    "-f", format,
+                    temp_output_path
+                ]
+                
+                print(f"Running command: {' '.join(cmd)}")
+                subprocess.run(cmd, check=True, capture_output=True)
+                
+                # Read the processed audio file
+                with open(temp_output_path, "rb") as audio_file:
+                    audio_data = audio_file.read()
+                
+                if response_format == "base64":
+                    # Encode audio data as base64
+                    audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+                    
+                    return {
+                        "audio_base64": audio_base64,
+                        "format": format,
+                        "voice": voice,
+                        "speed": speed
+                    }
+                else:  # url - save temporarily and return URL
+                    # Save to a temporary file
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}")
+                    temp_file.write(audio_data)
+                    temp_file.close()
+                    
+                    # For simplicity in this example, we'll just return the file path
+                    return {
+                        "audio_file_path": temp_file.name,
+                        "format": format,
+                        "voice": voice,
+                        "speed": speed
+                    }
+                    
+            except Exception as e:
+                print(f"Error during synthesis: {str(e)}")
+                raise Exception(f"Speech synthesis failed: {str(e)}")
             finally:
-                # Always clean up the temporary file
-                if os.path.exists(wav_path):
-                    os.unlink(wav_path)
-            
-            if response_format == "base64":
-                # Encode audio data as base64
-                audio_base64 = base64.b64encode(audio_buffer.read()).decode("utf-8")
-                
-                return {
-                    "audio_base64": audio_base64,
-                    "format": format,
-                    "voice": voice,
-                    "speed": speed
-                }
-            else:  # url - save temporarily and return URL
-                # Save to a temporary file
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}")
-                temp_file.write(audio_buffer.read())
-                temp_file.close()
-                
-                # For simplicity in this example, we'll just return the file path
-                # In a real implementation, you would upload this to a storage service and return the URL
-                return {
-                    "audio_file_path": temp_file.name,
-                    "format": format,
-                    "voice": voice,
-                    "speed": speed
-                }
+                # Clean up temporary files
+                for temp_file in [temp_wav_path, temp_output_path]:
+                    if temp_file and os.path.exists(temp_file):
+                        try:
+                            os.unlink(temp_file)
+                            print(f"Removed temporary file: {temp_file}")
+                        except Exception as e:
+                            print(f"Failed to remove temporary file {temp_file}: {str(e)}")
                 
         except Exception as e:
             raise Exception(f"Speech synthesis failed: {str(e)}")
