@@ -283,10 +283,12 @@ def main():
                 "MODEL_ID": "mistralai/Mistral-7B-Instruct-v0.2",
                 "MODEL_PATH": "/workspace/models",
                 "GPU_COUNT": "1",
-                "GPU_MEMORY_UTILIZATION": "0.85",
+                "GPU_MEMORY_UTILIZATION": "0.98",
                 "CACHE_DIR": "/workspace/models/cache",
                 "PRELOAD_MODEL": "true",
-                "HUGGINGFACE_API_KEY": os.getenv("HUGGINGFACE_API_KEY", "")
+                "HUGGINGFACE_API_KEY": os.getenv("HUGGINGFACE_API_KEY", ""),
+                "MAX_SEQ_LEN": "4096",
+                "QUANTIZATION": "awq"
             }
         }
 
