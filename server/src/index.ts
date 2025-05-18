@@ -18,9 +18,30 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Configure CORS
+// Get allowed origins for CORS
+const getAllowedOrigins = () => {
+  const origins = [
+    process.env.CLIENT_ORIGIN,
+    'http://localhost:3000'
+  ];
+  return origins;
+};
+
+// Configure CORS with dynamic origin
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || 'https://your-vercel-app.vercel.app',
+  origin: (origin, callback) => {
+    const allowedOrigins = getAllowedOrigins();
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      console.warn(`Origin ${origin} not allowed by CORS`);
+      return callback(null, allowedOrigins[0]);  // Default to first origin
+    }
+  },
   methods: ['GET', 'POST'],
   credentials: true
 }));
@@ -32,7 +53,19 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Initialize Socket.IO
 const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || 'https://your-vercel-app.vercel.app',
+    origin: (origin, callback) => {
+      const allowedOrigins = getAllowedOrigins();
+      
+      // Allow requests with no origin (like mobile apps)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        console.warn(`Socket.IO: Origin ${origin} not allowed by CORS`);
+        return callback(null, allowedOrigins[0]);  // Default to first origin
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true
   }
