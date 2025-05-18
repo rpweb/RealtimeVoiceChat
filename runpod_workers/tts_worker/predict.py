@@ -7,6 +7,8 @@ import json
 import numpy as np
 from piper import PiperVoice
 from pydub import AudioSegment
+import urllib.request
+import logging
 
 class TTSProcessor:
     def __init__(self):
@@ -19,6 +21,9 @@ class TTSProcessor:
         
         # Ensure the models directory exists
         os.makedirs(self.models_dir, exist_ok=True)
+        
+        # Download the default model if it doesn't exist
+        self.ensure_model_is_downloaded()
         
         # Load available models
         self.available_voices = {
@@ -41,6 +46,38 @@ class TTSProcessor:
         self.voice_instances = {}
         
         print(f"TTS processor initialized with Piper TTS. Available voices: {list(self.available_voices.keys())}")
+    
+    def ensure_model_is_downloaded(self):
+        """
+        Check if the default model exists, download if not
+        """
+        model_path = os.path.join(self.models_dir, "en_US-lessac-medium.onnx")
+        model_config_path = os.path.join(self.models_dir, "en_US-lessac-medium.onnx.json")
+        
+        # Check if model files already exist
+        if os.path.exists(model_path) and os.path.exists(model_config_path):
+            print(f"Model files already exist at {self.models_dir}")
+            return
+        
+        print(f"Downloading model files to {self.models_dir}...")
+        
+        # Model URLs
+        model_url = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+        config_url = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+        
+        try:
+            # Download model file
+            print(f"Downloading model file from {model_url}")
+            urllib.request.urlretrieve(model_url, model_path)
+            
+            # Download config file
+            print(f"Downloading config file from {config_url}")
+            urllib.request.urlretrieve(config_url, model_config_path)
+            
+            print("Model files downloaded successfully")
+        except Exception as e:
+            print(f"Error downloading model files: {str(e)}")
+            raise
     
     def _get_voice_instance(self, voice_name: str) -> PiperVoice:
         """
