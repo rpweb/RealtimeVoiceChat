@@ -1,125 +1,128 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useReactMediaRecorder } from 'react-media-recorder';
-import { FaMicrophone, FaStop, FaRedo } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaMicrophone, FaStop } from 'react-icons/fa';
 
 interface AudioRecorderProps {
-  onAudioCaptured: (audioBlob: Blob, audioBase64: string) => void;
+  onAudioChunk: (audioChunk: Float32Array, sampleRate: number) => void;
   isProcessing: boolean;
+  socketConnected: boolean;
 }
 
-const AudioRecorder: React.FC<AudioRecorderProps> = ({ onAudioCaptured, isProcessing }) => {
+const AudioRecorder: React.FC<AudioRecorderProps> = ({ 
+  onAudioChunk, 
+  isProcessing,
+  socketConnected
+}) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState<string | null>(null);
-
-  const {
-    status,
-    startRecording,
-    stopRecording,
-    mediaBlobUrl,
-    clearBlobUrl
-  } = useReactMediaRecorder({
-    audio: true,
-    blobPropertyBag: {
-      type: 'audio/wav'
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  
+  // Initialize audio context and recorder when recording starts
+  const startRecording = async () => {
+    try {
+      // Get microphone stream
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
+      // Create audio context
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 16000 // Use 16kHz for better speech recognition
+      });
+      audioContextRef.current = audioContext;
+      
+      // Create microphone source
+      const microphone = audioContext.createMediaStreamSource(stream);
+      
+      // Create script processor for handling audio data
+      // Note: ScriptProcessorNode is deprecated but has better browser support than AudioWorkletNode
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      audioProcessorRef.current = processor;
+      
+      // Process audio data in chunks
+      processor.onaudioprocess = (e) => {
+        const audioData = e.inputBuffer.getChannelData(0);
+        // Clone the data since it's from a buffer that will be reused
+        const audioChunk = new Float32Array(audioData);
+        onAudioChunk(audioChunk, audioContext.sampleRate);
+      };
+      
+      // Connect the audio graph: microphone -> processor -> destination
+      microphone.connect(processor);
+      processor.connect(audioContext.destination);
+      
+      setIsRecording(true);
+      
+      // Also create a MediaRecorder as a fallback/for preview
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      
+    } catch (error) {
+      console.error('Error starting recording:', error);
     }
-  });
-
-  // Update audio URL when mediaBlobUrl changes
-  useEffect(() => {
-    if (mediaBlobUrl) {
-      setAudioURL(mediaBlobUrl);
+  };
+  
+  // Stop recording and clean up
+  const stopRecording = () => {
+    if (audioProcessorRef.current && audioContextRef.current) {
+      audioProcessorRef.current.disconnect();
+      audioContextRef.current.close().catch(console.error);
     }
-  }, [mediaBlobUrl]);
-
-  // Handle recording state
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
+    setIsRecording(false);
+  };
+  
+  // Toggle recording state
   const handleRecording = () => {
     if (!isRecording) {
       startRecording();
     } else {
       stopRecording();
     }
-    setIsRecording(!isRecording);
   };
-
-  // Handle captured audio
-  const handleSendAudio = async () => {
-    if (mediaBlobUrl) {
-      try {
-        // Fetch the audio blob from the media URL
-        const response = await fetch(mediaBlobUrl);
-        const audioBlob = await response.blob();
-        
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = () => {
-          const base64data = reader.result as string;
-          // Extract the base64 content (remove data URL prefix)
-          const base64Audio = base64data.split(',')[1];
-          
-          // Send to parent component
-          onAudioCaptured(audioBlob, base64Audio);
-        };
-      } catch (error) {
-        console.error('Error processing audio:', error);
+  
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (isRecording) {
+        stopRecording();
       }
-    }
-  };
-
-  // Reset the recorder
-  const handleReset = () => {
-    clearBlobUrl();
-    setAudioURL(null);
-    setIsRecording(false);
-  };
-
+    };
+  }, [isRecording]);
+  
   return (
     <div className="flex flex-col items-center space-y-4 w-full max-w-md">
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center justify-center">
         <button
           onClick={handleRecording}
-          disabled={isProcessing}
+          disabled={isProcessing || !socketConnected}
           className={`p-4 rounded-full ${
             isRecording 
-              ? 'bg-red-500 hover:bg-red-600' 
+              ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
               : 'bg-blue-500 hover:bg-blue-600'
-          } text-white transition-colors`}
+          } text-white transition-colors ${(!socketConnected || isProcessing) ? 'opacity-50' : 'opacity-100'}`}
+          title={!socketConnected ? "Waiting for connection..." : isProcessing ? "Processing..." : isRecording ? "Stop recording" : "Start recording"}
         >
           {isRecording ? <FaStop /> : <FaMicrophone />}
         </button>
-
-        {audioURL && !isRecording && (
-          <>
-            <button
-              onClick={handleSendAudio}
-              disabled={isProcessing}
-              className="p-4 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-            >
-              Submit
-            </button>
-            <button
-              onClick={handleReset}
-              disabled={isProcessing}
-              className="p-4 rounded-full bg-gray-500 hover:bg-gray-600 text-white transition-colors"
-            >
-              <FaRedo />
-            </button>
-          </>
-        )}
       </div>
 
-      {audioURL && (
-        <div className="w-full">
-          <audio src={audioURL} controls className="w-full" />
-        </div>
-      )}
-
       <div className="text-sm text-gray-500">
-        {status === 'recording' && 'Recording in progress...'}
-        {status === 'stopped' && 'Recording stopped. Submit or re-record.'}
-        {isProcessing && 'Processing your audio...'}
+        {!socketConnected && 'Waiting for connection...'}
+        {socketConnected && isRecording && 'Recording in progress... Speaking is detected in real-time.'}
+        {socketConnected && !isRecording && !isProcessing && 'Click to start recording'}
+        {isProcessing && 'Processing your speech...'}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ from piper import PiperVoice
 from pydub import AudioSegment
 import urllib.request
 import subprocess
+import re
 
 class TTSProcessor:
     def __init__(self):
@@ -237,4 +238,53 @@ class TTSProcessor:
         """
         # This is a dummy implementation
         # In a real scenario, you would upload the file to a storage service and return the URL
-        return f"https://example.com/temp/{os.path.basename(file_path)}" 
+        return f"https://example.com/temp/{os.path.basename(file_path)}"
+
+    def synthesize_speech_by_sentences(
+        self,
+        text: str,
+        voice: str = "lessac",
+        format: str = "mp3",
+        speed: float = 1.0,
+        response_format: str = "base64"
+    ) -> List[Dict[str, Any]]:
+        """
+        Synthesize speech sentence by sentence for streaming output
+        
+        Args:
+            text: Text to convert to speech
+            voice: Voice name to use (lessac)
+            format: Audio format (mp3 or wav)
+            speed: Speed of speech (0.5 to 2.0)
+            response_format: How to return the audio (base64 or url)
+            
+        Returns:
+            List of dictionaries with speech data for each sentence
+        """
+        # Split text into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        # Filter out empty sentences
+        sentences = [s for s in sentences if s.strip()]
+        
+        results = []
+        
+        # Process each sentence
+        for sentence in sentences:
+            if not sentence.strip():
+                continue
+                
+            # Synthesize this sentence
+            result = self.synthesize_speech(
+                text=sentence,
+                voice=voice,
+                format=format,
+                speed=speed,
+                response_format=response_format
+            )
+            
+            # Add sentence to the result
+            result["sentence"] = sentence
+            results.append(result)
+            
+        return results 

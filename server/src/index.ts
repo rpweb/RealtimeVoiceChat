@@ -69,6 +69,16 @@ io.on('connection', (socket: Socket) => {
     }
   });
   
+  // Handle streaming audio chunks
+  socket.on('audio_chunk', async (data: { chunk: number[], sampleRate: number, sessionId: string }) => {
+    try {
+      await sessionManager.processAudioChunk(data.sessionId || sessionId, data.chunk, data.sampleRate);
+    } catch (error) {
+      console.error('Error processing audio chunk:', error);
+      socket.emit('error', { message: 'Error processing audio chunk' });
+    }
+  });
+  
   // Handle text messages
   socket.on('text_message', async (data: { message: string }) => {
     try {

@@ -211,6 +211,43 @@ export class RunPodService {
     }
   }
   
+  /**
+   * New method for streaming TTS output
+   * Breaks text into sentences and generates audio for each one separately
+   */
+  public async streamSpeech(
+    input: TTSRequest, 
+    onChunkReady: (chunk: string) => void
+  ): Promise<void> {
+    try {
+      // Split text into sentences (simple split on punctuation)
+      const sentences = input.text
+        .replace(/([.!?])\s+/g, "$1|")
+        .split("|")
+        .filter(s => s.trim().length > 0);
+      
+      // Process each sentence in sequence
+      for (const sentence of sentences) {
+        // Skip if empty
+        if (!sentence.trim()) continue;
+        
+        const sentenceInput = {
+          ...input,
+          text: sentence
+        };
+        
+        // Generate audio for this sentence
+        const audioChunk = await this.synthesizeSpeech(sentenceInput);
+        
+        // Send the chunk back
+        onChunkReady(audioChunk);
+      }
+    } catch (error) {
+      console.error('Error streaming speech:', error);
+      throw error;
+    }
+  }
+  
   private async pollForResult(
     endpointId: string, 
     jobId: string, 

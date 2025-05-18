@@ -25,15 +25,27 @@ def handler(job):
         speed = job_input.get("speed", 1.0)
         format = job_input.get("format", "mp3")
         response_format = job_input.get("response_format", "base64")  # 'base64' or 'url'
+        streaming = job_input.get("streaming", False)  # Whether to stream by sentences
         
         # Process the request
-        result = tts_processor.synthesize_speech(
-            text=text,
-            voice=voice,
-            format=format,
-            speed=speed,
-            response_format=response_format
-        )
+        if streaming:
+            # Stream by sentences for incremental results
+            result = tts_processor.synthesize_speech_by_sentences(
+                text=text,
+                voice=voice,
+                format=format,
+                speed=speed,
+                response_format=response_format
+            )
+        else:
+            # Process as a single unit
+            result = tts_processor.synthesize_speech(
+                text=text,
+                voice=voice,
+                format=format,
+                speed=speed,
+                response_format=response_format
+            )
         
         # Add available voices to the response
         result["available_voices"] = tts_processor.get_available_voices()
