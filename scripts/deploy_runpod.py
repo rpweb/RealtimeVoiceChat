@@ -285,7 +285,8 @@ def main():
                 "GPU_COUNT": "1",
                 "GPU_MEMORY_UTILIZATION": "0.85",
                 "CACHE_DIR": "/workspace/models/cache",
-                "PRELOAD_MODEL": "true"
+                "PRELOAD_MODEL": "true",
+                "HUGGINGFACE_TOKEN": os.getenv("HUGGINGFACE_API_KEY", "")
             }
         }
 
