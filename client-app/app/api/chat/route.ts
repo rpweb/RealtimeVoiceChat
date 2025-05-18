@@ -70,10 +70,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ messages: [] });
     }
     
-    // Fetch messages from backend for this session
-    const response = await axios.get(`${BACKEND_URL}/api/chat/messages/${sessionId}`);
-    
-    return NextResponse.json(response.data);
+    try {
+      // Try to fetch messages from backend for this session
+      const response = await axios.get(`${BACKEND_URL}/api/chat/messages/${sessionId}`);
+      return NextResponse.json(response.data);
+    } catch (error) {
+      // If the session doesn't exist (404) or other error, create a new session
+      if (axios.isAxiosError(error) && (error.response?.status === 404 || error.code === 'ERR_BAD_REQUEST')) {
+        console.log('Session not found, creating a new one');
+        
+        // Create a new session
+        const createSessionResponse = await axios.post(`${BACKEND_URL}/api/chat/session`, {
+          sessionId: sessionId
+        });
+        
+        return NextResponse.json(createSessionResponse.data);
+      }
+      
+      // For other errors, throw to be caught by the outer catch
+      throw error;
+    }
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     return NextResponse.json(
