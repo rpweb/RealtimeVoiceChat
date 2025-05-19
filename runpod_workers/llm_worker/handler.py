@@ -32,7 +32,7 @@ def handler(job):
         
         if not messages and not prompt:
             print("[DEBUG] No prompt or messages provided")
-            return {"error": "No prompt or messages provided. Please include either 'prompt' or 'messages' field."}
+            return {"error": "No prompt or messages provided. Please include either 'prompt' or 'messages' field!"}
         
         # Get parameters for the LLM
         temperature = job_input.get("temperature", 0.7)
