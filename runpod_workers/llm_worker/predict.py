@@ -1,8 +1,8 @@
+# predict.py
 import os
 import time
 import json
-from typing import Dict, List, Any, Optional, Union
-
+from typing import Dict, List, Any, Optional, Union, Iterator
 import torch
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
@@ -17,56 +17,34 @@ class LLMGenerator:
         """
         self.model_id = model_id
         print(f"Loading model {model_id}...")
-        
-        # Get GPU configuration from environment
         gpu_count = int(os.environ.get("GPU_COUNT", torch.cuda.device_count()))
         gpu_memory_utilization = float(os.environ.get("GPU_MEMORY_UTILIZATION", 0.7))
-        
-        # Get model storage path - defaults to huggingface cache location
-        # You can set MODEL_PATH in RunPod to use a persistent volume
         model_path = os.environ.get("MODEL_PATH", None)
         if model_path:
             print(f"Using custom model path: {model_path}")
-            # If using custom path, ensure it exists
             os.makedirs(model_path, exist_ok=True)
             os.environ["TRANSFORMERS_CACHE"] = model_path
             os.environ["HF_HOME"] = model_path
-
         hg_token = os.environ.get("HUGGINGFACE_API_KEY", None)
-        
-        # Initialize vLLM engine with optimized settings for smaller models
         self.llm = LLM(
             model=model_id,
             tensor_parallel_size=gpu_count,
             gpu_memory_utilization=gpu_memory_utilization,
             trust_remote_code=True
         )
-        
-        # Load tokenizer for token counting
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_id,
             trust_remote_code=True,
             token=hg_token
         )
-        
         print(f"Model {model_id} loaded successfully using {gpu_count} GPUs")
     
     def _format_chat_messages(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Format chat messages into a prompt string
-        
-        Args:
-            messages: List of message dictionaries with 'role' and 'content' keys
-            
-        Returns:
-            Formatted prompt string
-        """
-        # Simple formatting for Llama 3 chat format
+        # Existing method (unchanged)
         prompt = ""
         for message in messages:
             role = message.get("role", "").lower()
             content = message.get("content", "")
-            
             if role == "system":
                 prompt += f"<|system|>\n{content}\n"
             elif role == "user":
@@ -74,13 +52,9 @@ class LLMGenerator:
             elif role == "assistant":
                 prompt += f"<|assistant|>\n{content}\n"
             else:
-                # Handle other roles (fallback to appending content)
                 prompt += f"{content}\n"
-        
-        # Add final assistant prompt if last message is not from assistant
         if not messages or messages[-1].get("role", "").lower() != "assistant":
             prompt += "<|assistant|>\n"
-            
         return prompt
     
     def generate_chat_response(
@@ -93,29 +67,13 @@ class LLMGenerator:
         repetition_penalty: float = 1.1,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
-        stop: Optional[List[str]] = None
-    ) -> str:
+        stop: Optional[List[str]] = None,
+        stream: bool = False
+    ) -> Union[str, Iterator[str]]:
         """
-        Generate a response based on a chat message history
-        
-        Args:
-            messages: List of message dictionaries with 'role' and 'content' keys
-            temperature: Sampling temperature
-            max_tokens: Maximum number of tokens to generate
-            top_p: Nucleus sampling probability
-            top_k: Top-k sampling parameter
-            repetition_penalty: Penalty for repeating tokens
-            presence_penalty: Penalty for token presence in prompt
-            frequency_penalty: Penalty for token frequency in prompt
-            stop: List of stop sequences
-            
-        Returns:
-            Generated response text
+        Generate a response based on a chat message history, with optional streaming.
         """
-        # Format chat messages into prompt
         prompt = self._format_chat_messages(messages)
-        
-        # Generate response using the formatted prompt
         return self.generate_completion(
             prompt=prompt,
             temperature=temperature,
@@ -125,7 +83,8 @@ class LLMGenerator:
             repetition_penalty=repetition_penalty,
             presence_penalty=presence_penalty,
             frequency_penalty=frequency_penalty,
-            stop=stop
+            stop=stop,
+            stream=stream
         )
     
     def generate_completion(
@@ -138,26 +97,12 @@ class LLMGenerator:
         repetition_penalty: float = 1.1,
         presence_penalty: float = 0.0,
         frequency_penalty: float = 0.0,
-        stop: Optional[List[str]] = None
-    ) -> str:
+        stop: Optional[List[str]] = None,
+        stream: bool = False
+    ) -> Union[str, Iterator[str]]:
         """
-        Generate a completion for a given prompt
-        
-        Args:
-            prompt: Input text prompt
-            temperature: Sampling temperature
-            max_tokens: Maximum number of tokens to generate
-            top_p: Nucleus sampling probability
-            top_k: Top-k sampling parameter
-            repetition_penalty: Penalty for repeating tokens
-            presence_penalty: Penalty for token presence in prompt
-            frequency_penalty: Penalty for token frequency in prompt
-            stop: List of stop sequences
-            
-        Returns:
-            Generated text completion
+        Generate a completion for a given prompt, with optional streaming.
         """
-        # Configure sampling parameters
         sampling_params = SamplingParams(
             temperature=temperature,
             max_tokens=max_tokens,
@@ -169,12 +114,17 @@ class LLMGenerator:
             stop=stop if stop else None
         )
         
-        # Generate response
-        outputs = self.llm.generate(prompt, sampling_params)
-        
-        # Extract generated text
-        if outputs and len(outputs) > 0:
-            generated_text = outputs[0].outputs[0].text
-            return generated_text
-        
-        return "" 
+        if stream:
+            # Streaming generation
+            def stream_generator() -> Iterator[str]:
+                outputs = self.llm.generate(prompt, sampling_params, use_tqdm=False)
+                for output in outputs:
+                    for completion in output.outputs:
+                        yield completion.text
+            return stream_generator()
+        else:
+            # Non-streaming generation
+            outputs = self.llm.generate(prompt, sampling_params)
+            if outputs and len(outputs) > 0:
+                return outputs[0].outputs[0].text
+            return ""

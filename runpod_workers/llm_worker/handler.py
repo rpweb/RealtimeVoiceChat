@@ -1,18 +1,18 @@
+# handler.py
 import runpod
 import os
 import json
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Iterator
 from predict import LLMGenerator
 
-# Initialize the LLM generator with pre-loaded model
-# Using TinyLlama for testing as it's only ~2GB and initializes quickly
+# Initialize the LLM generator
 model_id = os.environ.get("MODEL_ID", "mistralai/Mistral-7B-Instruct-v0.2")
 llm_generator = LLMGenerator(model_id=model_id)
     
 def handler(job):
     """
-    Handle the serverless request
+    Handle the serverless request, supporting both streaming and non-streaming.
     """
     print(f"[DEBUG] Received job: {job}")
     
@@ -28,8 +28,8 @@ def handler(job):
         
         # Get prompt if provided
         prompt = job_input.get("prompt", "")
+        stream = job_input.get("stream", False)  # Check if streaming is requested
         
-        # Ensure we have either messages or a prompt
         if not messages and not prompt:
             print("[DEBUG] No prompt or messages provided")
             return {"error": "No prompt or messages provided. Please include either 'prompt' or 'messages' field."}
@@ -44,49 +44,91 @@ def handler(job):
         frequency_penalty = job_input.get("frequency_penalty", 0.0)
         stop_sequences = job_input.get("stop", [])
         
-        # Process the request
-        if messages:
-            # Process using chat-style API
-            response = llm_generator.generate_chat_response(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-                stop=stop_sequences,
-            )
+        if stream:
+            # Streaming response नि: Streaming generator for Vercel AI SDK compatibility
+            def stream_response() -> Iterator[Dict[str, Any]]:
+                response_chunks = []
+                if messages:
+                    generator = llm_generator.generate_chat_response(
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        top_p=top_p,
+                        top_k=top_k,
+                        repetition_penalty=repetition_penalty,
+                        presence_penalty=presence_penalty,
+                        frequency_penalty=frequency_penalty,
+                        stop=stop_sequences,
+                        stream=True
+                    )
+                else:
+                    generator = llm_generator.generate_completion(
+                        prompt=prompt,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        top_p=top_p,
+                        top_k=top_k,
+                        repetition_penalty=repetition_penalty,
+                        presence_penalty=presence_penalty,
+                        frequency_penalty=frequency_penalty,
+                        stop=stop_sequences,
+                        stream=True
+                    )
+                
+                for chunk in generator:
+                    response_chunks.append(chunk)
+                    # Yield chunk in Vercel AI SDK-compatible format
+                    yield {
+                        "text": chunk,
+                        "model": llm_generator.model_id,
+                        "processing_time": time.time() - start_time
+                    }
+                
+                # Final chunk with complete response
+                yield {
+                    "text": "".join(response_chunks),  # Complete text
+                    "model": llm_generator.model_id,
+                    "processing_time": time.time() - start_time,
+                    "done": True
+                }
+            
+            return stream_response()
         else:
-            # Process using completion-style API
-            response = llm_generator.generate_completion(
-                prompt=prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-                stop=stop_sequences,
-            )
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        
-        # Add metadata to response
-        result = {
-            "response": response,
-            "model": llm_generator.model_id,
-            "processing_time": processing_time
-        }
-        
-        return result
+            # Non-streaming response (existing logic)
+            if messages:
+                response = llm_generator.generate_chat_response(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    top_k=top_k,
+                    repetition_penalty=repetition_penalty,
+                    presence_penalty=presence_penalty,
+                    frequency_penalty=frequency_penalty,
+                    stop=stop_sequences,
+                )
+            else:
+                response = llm_generator.generate_completion(
+                    prompt=prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    top_k=top_k,
+                    repetition_penalty=repetition_penalty,
+                    presence_penalty=presence_penalty,
+                    frequency_penalty=frequency_penalty,
+                    stop=stop_sequences,
+                )
+            processing_time = time.time() - start_time
+            return {
+                "response": response,
+                "model": llm_generator.model_id,
+                "processing_time": processing_time
+            }
     
     except Exception as e:
         print(f"[ERROR] Exception in handler: {str(e)}")
         return {"error": str(e)}
 
 # Start the runpod handler
-runpod.serverless.start({"handler": handler}) 
+runpod.serverless.start({"handler": handler})

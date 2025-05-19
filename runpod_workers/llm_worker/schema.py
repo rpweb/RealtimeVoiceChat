@@ -1,3 +1,4 @@
+# schema.py
 INPUT_SCHEMA = {
     "prompt": {
         "type": "string",
@@ -73,5 +74,11 @@ INPUT_SCHEMA = {
         "items": {
             "type": "string"
         }
+    },
+    "stream": {
+        "type": "boolean",
+        "description": "Whether to stream the response",
+        "required": False,
+        "default": False
     }
-} 
+}
