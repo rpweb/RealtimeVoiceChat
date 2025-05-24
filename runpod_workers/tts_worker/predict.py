@@ -2,6 +2,7 @@ import os
 import base64
 import tempfile
 import io
+import wave
 from typing import Dict, Any, Optional, List
 import json
 from piper import PiperVoice
@@ -101,7 +102,7 @@ class TTSProcessor:
                 config = json.load(config_file)
             
             # Create the voice instance
-            self.voice_instances[voice_name] = PiperVoice.load(model_path, config_path)
+            self.voice_instances[voice_name] = PiperVoice.load(model_path)
         
         return self.voice_instances[voice_name]
     
@@ -152,7 +153,8 @@ class TTSProcessor:
                 
                 # Synthesize speech using Piper
                 print(f"Synthesizing speech to {temp_wav_path}")
-                voice_instance.synthesize(text, temp_wav_path)
+                with wave.open(temp_wav_path, "wb") as wav_file:
+                    voice_instance.synthesize(text, wav_file)
                 
                 # Verify the file exists and has content
                 if not os.path.exists(temp_wav_path) or os.path.getsize(temp_wav_path) == 0:
