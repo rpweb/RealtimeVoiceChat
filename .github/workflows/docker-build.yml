@@ -2,7 +2,7 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ openai-image-serverless-runpod ]  # Adjust this to your primary branch name if needed
+    branches: [ main ]  # Adjust this to your primary branch name if needed
   workflow_dispatch:  # Allows manual triggering from GitHub UI
 
 jobs:
@@ -14,47 +14,8 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v3
       
-      # Free up disk space
-      - name: Free up disk space
-        run: |
-          echo "Listing top 20 largest packages before cleanup"
-          sudo du -ha /usr/share | sort -rh | head -20
-          
-          echo "Removing unnecessary packages and cache"
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache
-          
-          # More aggressive cleanup
-          echo "Removing additional large packages"
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/share/chromium
-          sudo rm -rf /usr/share/swift
-          
-          # Clear apt cache
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          
-          # Clear npm and yarn cache
-          npm cache clean --force || true
-          yarn cache clean || true
-          
-          echo "Removing Docker images not needed for this build"
-          docker rmi $(docker images -aq) || true
-          
-          echo "Clearing Docker temporary build files"
-          docker builder prune -af
-          
-          echo "Current disk space"
-          df -h
-      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-        with:
-          driver-opts: |
-            image=moby/buildkit:latest
-            network=host
       
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -62,31 +23,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      # Set up Docker layer caching
-      - name: Set up Docker layer caching
-        uses: actions/cache@v3
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-      
-      # Try building with standard Docker instead of Buildx for less memory usage
-      - name: Build and push with standard Docker
-        run: |
-          # Pull the cache image if it exists
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache || true
-          
-          # Build the image with cache
-          docker build \
-            --cache-from ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }} \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            .
-          
-          # Push the images
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache 
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache,mode=max
+          platforms: linux/amd64 
