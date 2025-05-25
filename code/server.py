@@ -647,7 +647,7 @@ class TranscriptionCallbacks:
         """Callback invoked when the system determines TTS synthesis can proceed."""
         # Access global manager state
         if self.app.state.SpeechPipelineManager.running_generation and not self.app.state.SpeechPipelineManager.running_generation.abortion_started:
-            logger.info(f"{Colors.apply('🖥️🔊 TTS ALLOWED').blue}")
+            #logger.info(f"{Colors.apply('🖥️🔊 TTS ALLOWED').blue}")
             self.app.state.SpeechPipelineManager.running_generation.tts_quick_allowed_event.set()
 
     def on_potential_sentence(self, txt: str):
@@ -778,7 +778,7 @@ class TranscriptionCallbacks:
         Args:
             txt: The partial assistant text.
         """
-        logger.info(f"{Colors.apply('🖥️💬 PARTIAL ASSISTANT ANSWER: ').green}{txt}")
+        #logger.info(f"{Colors.apply('🖥️💬 PARTIAL ASSISTANT ANSWER: ').green}{txt}")
         # Use connection-specific user_interrupted flag
         if not self.user_interrupted:
             self.assistant_answer = txt
