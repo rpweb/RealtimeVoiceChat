@@ -293,7 +293,7 @@ class TranscriptionProcessor:
                     if time_since_silence > potential_sentence_end_time:
                         # Check if realtime_text exists before logging/detecting
                         current_text = self.realtime_text if self.realtime_text else ""
-                        logger.info(f"👂🔚 {Colors.YELLOW}Potential sentence end detected (timed out){Colors.RESET}: {current_text}")
+                        # logger.info(f"👂🔚 {Colors.YELLOW}Potential sentence end detected (timed out){Colors.RESET}: {current_text}")
                         # Use force_yield=True because this is triggered by timeout, not punctuation detection
                         self.detect_potential_sentence_end(current_text, force_yield=True, force_ellipses=True) # Force ellipses if timeout occurs
 
@@ -348,7 +348,7 @@ class TranscriptionProcessor:
             current_duration = self._get_recorder_param("post_speech_silence_duration")
             if current_duration != waiting_time:
                 log_text = text if text else "(No text provided)"
-                logger.info(f"👂⏳ {Colors.GRAY}New waiting time: {Colors.RESET}{Colors.YELLOW}{waiting_time:.2f}{Colors.RESET}{Colors.GRAY} for text: {log_text}{Colors.RESET}")
+                # logger.info(f"👂⏳ {Colors.GRAY}New waiting time: {Colors.RESET}{Colors.YELLOW}{waiting_time:.2f}{Colors.RESET}{Colors.GRAY} for text: {log_text}{Colors.RESET}")
                 self._set_recorder_param("post_speech_silence_duration", waiting_time)
         else:
             logger.warning("👂⚠️ Recorder not initialized, cannot set new waiting time.")
@@ -567,7 +567,7 @@ class TranscriptionProcessor:
                 # if len(self.potential_sentences_yielded) > MAX_YIELDED_SIZE:
                 #    self.potential_sentences_yielded.pop(0)
 
-                logger.info(f"👂➡️ Yielding potential sentence end: {stripped_text_raw}")
+                # logger.info(f"👂➡️ Yielding potential sentence end: {stripped_text_raw}")
                 if self.potential_sentence_end:
                     self.potential_sentence_end(stripped_text_raw) # Callback with original punctuation
             # else: # No need to log this every time, can be noisy
@@ -583,7 +583,7 @@ class TranscriptionProcessor:
         """
         if self.silence_active != silence_active:
             self.silence_active = silence_active
-            logger.info(f"👂🤫 Silence state changed: {'ACTIVE' if silence_active else 'INACTIVE'}")
+            # logger.info(f"👂🤫 Silence state changed: {'ACTIVE' if silence_active else 'INACTIVE'}")
             if self.silence_active_callback:
                 self.silence_active_callback(silence_active)
 
@@ -731,7 +731,7 @@ class TranscriptionProcessor:
             # Log only significant changes or all partials based on debug level maybe
             if stripped_partial_user_text_new != self.stripped_partial_user_text:
                 self.stripped_partial_user_text = stripped_partial_user_text_new
-                logger.info(f"👂📝 Partial transcription: {Colors.CYAN}{text}{Colors.RESET}")
+                # logger.info(f"👂📝 Partial transcription: {Colors.CYAN}{text}{Colors.RESET}")
                 if self.realtime_transcription_callback:
                     self.realtime_transcription_callback(text)
                 if USE_TURN_DETECTION and hasattr(self, 'turn_detection'):
