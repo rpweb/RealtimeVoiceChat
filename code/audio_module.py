@@ -133,7 +133,7 @@ class AudioProcessor:
             self.engine = CoquiEngine(
                 specific_model="Lasinya",
                 local_models_path="./models",
-                voice="reference_audio3.wav",
+                voice="en_sample.wav",
                 speed=1.1,
                 use_deepspeed=use_deepspeed,
                 thread_count=thread_count,
