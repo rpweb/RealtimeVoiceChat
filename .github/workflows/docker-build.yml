@@ -16,6 +16,10 @@ jobs:
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
       
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -23,14 +27,31 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+      # Set up Docker layer caching
+      - name: Set up Docker layer caching
+        uses: actions/cache@v3
         with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache,mode=max
-          platforms: linux/amd64 
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      # Try building with standard Docker instead of Buildx for less memory usage
+      - name: Build and push with standard Docker
+        run: |
+          # Pull the cache image if it exists
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache || true
+          
+          # Build the image with cache
+          docker build \
+            --cache-from ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            .
+          
+          # Push the images
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/realtime-voice-chat:buildcache 
