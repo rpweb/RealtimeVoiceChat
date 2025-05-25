@@ -2,7 +2,7 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ main ]  # Adjust this to your primary branch name if needed
+    branches: [ main, custom-openai ]  # Adjust this to your primary branch name if needed
   workflow_dispatch:  # Allows manual triggering from GitHub UI
 
 jobs:

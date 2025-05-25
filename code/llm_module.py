@@ -58,9 +58,10 @@ try:
 except ImportError:
     logger.debug("🤖💥 Error importing dotenv, skipping .env load.")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("RUNPOD_API_KEY")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.runpod.ai/v2/flucjdcomu60vx/openai/v1")
 
 # --- Backend Client Creation/Check Functions ---
 def _create_openai_client(api_key: Optional[str], base_url: Optional[str] = None) -> OpenAI:
@@ -245,7 +246,7 @@ class LLM:
         self.effective_openai_key = self._api_key or OPENAI_API_KEY
         self.effective_ollama_url = self._base_url or OLLAMA_BASE_URL if self.backend == "ollama" else None
         self.effective_lmstudio_url = self._base_url or LMSTUDIO_BASE_URL if self.backend == "lmstudio" else None
-        self.effective_openai_base_url = self._base_url if self.backend == "openai" and self._base_url else None
+        self.effective_openai_base_url = self._base_url or OPENAI_BASE_URL if self.backend == "openai" else None
 
         if self.backend == "ollama" and self.effective_ollama_url:
              url = self.effective_ollama_url
