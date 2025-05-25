@@ -5,7 +5,7 @@ from logsetup import setup_logging
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 if __name__ == "__main__":
-    logger.info("🖥️👋 Welcome to local real-time voice chat")
+    logger.info("🖥️👋 Welcome to local real-time voice chat!")
 
 from upsample_overlap import UpsampleOverlap
 from datetime import datetime
