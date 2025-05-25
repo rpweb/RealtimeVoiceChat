@@ -26,12 +26,6 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache
           
-          # More aggressive cleanup
-          echo "Removing additional large packages"
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/share/chromium
-          sudo rm -rf /usr/share/swift
-          
           # Clear apt cache
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
