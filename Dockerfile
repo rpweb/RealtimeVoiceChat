@@ -92,6 +92,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
     update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
 # Set working directory for the application
 WORKDIR /app/code
 
