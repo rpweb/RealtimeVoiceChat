@@ -327,6 +327,7 @@ document.getElementById("startBtn").onclick = async () => {
     if (typeof evt.data === "string") {
       try {
         const msg = JSON.parse(evt.data);
+        console.log("📨 Received message:", msg.type, msg);
         
         // Handle streaming messages
         if (msg.type === "stream_chunk") {

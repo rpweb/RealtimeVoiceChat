@@ -356,18 +356,23 @@ class ConnectionManager:
             
             # Parse the streaming response
             stream_data = stream_response.json()
+            logger.info(f"🔍 RunPod stream response: {stream_data}")
             
             # Send each chunk to the client as it arrives
             if isinstance(stream_data, list):
-                for chunk in stream_data:
+                logger.info(f"📦 Processing {len(stream_data)} chunks from RunPod")
+                for i, chunk in enumerate(stream_data):
                     # Convert RunPod response format to client-expected format
                     chunk_type = chunk.get("type", "")
+                    logger.info(f"📡 Sending chunk {i+1}/{len(stream_data)}: {chunk_type}")
                     
                     # Send stream chunk for all types - the client handles everything
                     await self.send_to_client(client_id, {
                         "type": "stream_chunk",
                         "data": chunk
                     })
+            else:
+                logger.warning(f"⚠️ Unexpected stream_data format: {type(stream_data)}")
             
             # Send completion message
             await self.send_to_client(client_id, {
