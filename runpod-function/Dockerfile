@@ -1,10 +1,10 @@
-# Use CUDA 12.1.1 base image
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+# Stage 1: Builder Stage - Install dependencies including build tools and CUDA toolkit components
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04 AS builder
 
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.10, pip, and system dependencies
+# Install Python 3.10, pip, build essentials, git, and other system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     python3-pip \
@@ -12,9 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10-venv \
     build-essential \
     git \
-    ffmpeg \
     libsndfile1 \
     libportaudio2 \
+    ffmpeg \
     portaudio19-dev \
     python3-setuptools \
     python3.10-distutils \
@@ -50,16 +50,56 @@ RUN echo "Building DeepSpeed with flags: DS_BUILD_TRANSFORMER=${DS_BUILD_TRANSFO
     pip install --no-cache-dir deepspeed \
     || (echo "DeepSpeed install failed. Check build logs above." && exit 1)
 
-# Copy requirements and install Python dependencies
+# Copy requirements file first to leverage Docker cache
 COPY requirements.txt .
+
+# Install remaining Python dependencies from requirements.txt
 RUN pip install --no-cache-dir --prefer-binary -r requirements.txt \
     || (echo "pip install -r requirements.txt FAILED." && exit 1)
 
 # Pin ctranslate2 to a compatible version
 RUN pip install --no-cache-dir "ctranslate2<4.5.0"
 
-# Copy all application files
+# Copy the application code
 COPY . .
+
+# --- Stage 2: Runtime Stage ---
+# Base image still needs CUDA toolkit for PyTorch/DeepSpeed/etc in the app
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+# Avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies for the APP
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3.10-dev \
+    libsndfile1 \
+    ffmpeg \
+    libportaudio2 \
+    python3-setuptools \
+    python3.10-distutils \
+    ninja-build \
+    build-essential \
+    g++ \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make python3.10 the default python
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Set working directory for the application
+WORKDIR /app
+
+# Copy installed Python packages from the builder stage
+RUN mkdir -p /usr/local/lib/python3.10/dist-packages
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+
+# Copy the application code from the builder stage
+COPY --from=builder /app .
 
 # <<<--- Model Pre-downloads for faster cold starts --->>>
 # <<<--- Silero VAD Pre-download --->>>
@@ -102,26 +142,26 @@ RUN echo "Preloading SentenceFinishedClassification model..." && \
                 print('Model downloads successful.')" \
     || (echo "Sentence Classifier download failed" && exit 1)
 
-# Set environment variables
+# --- Keep ENV vars ---
 ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
 ENV CUDA_HOME=/usr/local/cuda
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+ENV PYTHONUNBUFFERED=1
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-ENV HF_HOME=/app/.cache/huggingface
-ENV TORCH_HOME=/app/.cache/torch
 ENV DS_BUILD_OPS=1
 ENV DS_BUILD_CPU_ADAM=0
 ENV DS_BUILD_FUSED_ADAM=0
 ENV DS_BUILD_UTILS=0
 ENV DS_BUILD_TRANSFORMER=1
+ENV HF_HOME=/app/.cache/huggingface
+ENV TORCH_HOME=/app/.cache/torch
 
 # Create cache directories
 RUN mkdir -p /app/.cache/huggingface /app/.cache/torch
 
-# Expose port (though not strictly necessary for serverless)
+# Expose port
 EXPOSE 8000
 
 # Command to run the handler
