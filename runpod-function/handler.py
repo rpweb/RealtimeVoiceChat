@@ -79,40 +79,94 @@ class VoiceChatProcessor:
                 "buffer_size": len(session["audio_buffer"])
             }
             
-            # Optimized processing steps with reduced latency
-            import time
-            
-            # Step 1: Audio preprocessing (optimized)
-            time.sleep(0.05)  # Reduced from 0.1s to 50ms
+            # Step 1: Audio preprocessing
             yield {
                 "type": "audio_preprocessing",
                 "status": "complete",
                 "message": "Audio preprocessing complete"
             }
             
-            # Step 2: Speech recognition (optimized with faster ASR)
-            time.sleep(0.15)  # Reduced from 0.3s to 150ms
-            transcribed_text = f"[Transcribed audio from client {client_id}]"  # Placeholder
+            # Step 2: Speech recognition (placeholder for now)
+            transcribed_text = f"Hello, this is a test transcription from client {client_id}"
             yield {
                 "type": "speech_recognition",
                 "status": "complete",
                 "text": transcribed_text
             }
             
-            # Step 3: LLM processing (optimized with smaller/faster model)
-            time.sleep(0.25)  # Reduced from 0.5s to 250ms
-            response_text = f"Hello! I heard you say: {transcribed_text}"  # Placeholder
+            # Step 3: LLM processing (placeholder for now)
+            response_text = f"I heard you say: {transcribed_text}. How can I help you today?"
             yield {
                 "type": "llm_response",
                 "status": "complete",
                 "text": response_text
             }
             
-            # Step 4: TTS generation (optimized with faster TTS)
-            time.sleep(0.2)   # Reduced from 0.4s to 200ms
-            # Generate placeholder audio data
-            placeholder_audio = b"fake_audio_data_" + str(time.time()).encode()
-            audio_b64 = base64.b64encode(placeholder_audio).decode('utf-8')
+            # Step 4: TTS generation using real audio processor
+            logger.info(f"🔊 Generating TTS for: {response_text[:50]}...")
+            
+            # Use the global audio processor to generate real TTS
+            import threading
+            import queue
+            import time
+            
+            # Create a queue for audio chunks (use threading.Queue, not asyncio.Queue)
+            audio_queue = queue.Queue()
+            stop_event = threading.Event()
+            
+            # Generate TTS audio in a separate thread
+            def tts_worker():
+                try:
+                    # Use the global speech_pipeline_manager's audio processor
+                    audio_processor = speech_pipeline_manager.audio
+                    success = audio_processor.synthesize(
+                        text=response_text,
+                        audio_chunks=audio_queue,
+                        stop_event=stop_event,
+                        generation_string="RunPod"
+                    )
+                    logger.info(f"🔊 TTS synthesis completed: {success}")
+                except Exception as e:
+                    logger.error(f"❌ TTS synthesis error: {e}")
+                    stop_event.set()
+            
+            # Start TTS generation in background
+            tts_thread = threading.Thread(target=tts_worker)
+            tts_thread.start()
+            
+            # Collect all audio chunks
+            audio_chunks = []
+            start_time = time.time()
+            timeout = 10.0  # 10 second timeout
+            
+            while True:
+                try:
+                    # Wait for audio chunks with timeout
+                    chunk = audio_queue.get(timeout=0.1)
+                    audio_chunks.append(chunk)
+                except queue.Empty:
+                    # No chunk available, check if we should continue waiting
+                    if stop_event.is_set() or not tts_thread.is_alive():
+                        break
+                    if time.time() - start_time > timeout:
+                        logger.warning("⏰ TTS generation timeout")
+                        stop_event.set()
+                        break
+            
+            # Wait for thread to finish
+            tts_thread.join(timeout=2.0)
+            
+            # Combine all audio chunks
+            if audio_chunks:
+                combined_audio = b''.join(audio_chunks)
+                audio_b64 = base64.b64encode(combined_audio).decode('utf-8')
+                logger.info(f"🔊 Generated {len(combined_audio)} bytes of TTS audio")
+            else:
+                # Fallback to silence if no audio generated
+                logger.warning("⚠️ No TTS audio generated, using silence")
+                silence_samples = 24000  # 1 second of silence at 24kHz
+                silence_audio = b'\x00' * (silence_samples * 2)  # 16-bit samples
+                audio_b64 = base64.b64encode(silence_audio).decode('utf-8')
             
             yield {
                 "type": "tts_generation",
