@@ -71,7 +71,7 @@ function flushBatch() {
     socket.send(batchBuffer);
     console.log(`🎵 Sent audio batch with energy: ${avgEnergy.toFixed(1)}`);
   } else {
-    console.log(`🔇 Skipped silent batch (energy: ${avgEnergy.toFixed(1)})`);
+    // console.log(`🔇 Skipped silent batch (energy: ${avgEnergy.toFixed(1)})`);
   }
 
   bufferPool.push(batchBuffer);
