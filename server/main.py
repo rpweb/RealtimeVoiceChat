@@ -46,9 +46,9 @@ async def lifespan(app: FastAPI):
     """Manages the application's lifespan."""
     logger.info("🚀 Railway server starting up")
     
-    # Start the audio buffer flusher task
-    manager._flusher_task = asyncio.create_task(manager._audio_buffer_flusher())
-    logger.info("🧹 Started audio buffer flusher task")
+    # Temporarily disable background flusher to reduce requests
+    # manager._flusher_task = asyncio.create_task(manager._audio_buffer_flusher())
+    # logger.info("🧹 Started audio buffer flusher task")
     
     yield
     
@@ -266,7 +266,7 @@ class ConnectionManager:
         """Background task to flush old audio buffers."""
         while True:
             try:
-                await asyncio.sleep(5.0)  # Check every 5 seconds
+                await asyncio.sleep(10.0)  # Check every 10 seconds (less frequent)
                 current_time = time.time()
                 
                 for client_id in list(self.audio_buffers.keys()):
@@ -277,8 +277,9 @@ class ConnectionManager:
                     buffer_size = len(self.audio_buffers[client_id])
                     time_since_last = current_time - last_request
                     
-                    # Flush if buffer has audio and it's been too long
-                    if buffer_size > 0 and time_since_last >= 10.0:  # 10 seconds max wait
+                    # Only flush if buffer has significant audio and it's been a long time
+                    min_flush_size = 48000  # At least 1 second of audio before flushing
+                    if buffer_size >= min_flush_size and time_since_last >= 15.0:  # 15 seconds max wait
                         logger.info(f"🧹 Flushing stale audio buffer for {client_id}: {buffer_size} bytes")
                         
                         buffered_audio = bytes(self.audio_buffers[client_id])
@@ -304,6 +305,8 @@ class ConnectionManager:
                             
                         except Exception as e:
                             logger.error(f"❌ Error flushing audio buffer: {e}")
+                    elif buffer_size > 0:
+                        logger.debug(f"🔄 Keeping buffer for {client_id}: {buffer_size} bytes (waiting for more audio)")
                             
             except asyncio.CancelledError:
                 break
@@ -357,11 +360,14 @@ class ConnectionManager:
             # Send each chunk to the client as it arrives
             if isinstance(stream_data, list):
                 for chunk in stream_data:
-                    if "output" in chunk:
-                        await self.send_to_client(client_id, {
-                            "type": "stream_chunk",
-                            "data": chunk["output"]
-                        })
+                    # Convert RunPod response format to client-expected format
+                    chunk_type = chunk.get("type", "")
+                    
+                    # Send stream chunk for all types - the client handles everything
+                    await self.send_to_client(client_id, {
+                        "type": "stream_chunk",
+                        "data": chunk
+                    })
             
             # Send completion message
             await self.send_to_client(client_id, {
