@@ -86,19 +86,106 @@ class VoiceChatProcessor:
                 "message": "Audio preprocessing complete"
             }
             
-            # Step 2: Speech recognition (placeholder for now)
-            transcribed_text = f"Hello, this is a test transcription from client {client_id}"
+            # Step 2: Real speech recognition
+            logger.info(f"🎤 Starting speech recognition for {len(audio_bytes)} bytes of audio")
+            
+            try:
+                # Process audio through the speech recognition pipeline
+                import numpy as np
+                
+                # Convert audio bytes to numpy array (assuming 16-bit PCM)
+                audio_np = np.frombuffer(audio_bytes, dtype=np.int16)
+                logger.info(f"🎤 Audio samples: {len(audio_np)}, max amplitude: {np.max(np.abs(audio_np))}")
+                
+                # Use the audio input processor for transcription
+                processed_audio = audio_input_processor.process_audio_chunk(audio_bytes)
+                logger.info(f"🎤 Processed audio samples: {len(processed_audio)}")
+                
+                # Feed to transcriber - this is a simplified approach
+                # The original uses a complex async pipeline, but for RunPod we'll do it synchronously
+                transcriber = audio_input_processor.transcriber
+                
+                # Initialize the transcriber if not already done
+                if not transcriber.recorder:
+                    logger.info("🎤 Initializing transcriber recorder...")
+                    transcriber._create_recorder()
+                
+                # Feed the processed audio to the transcriber
+                if transcriber.recorder:
+                    logger.info("🎤 Feeding audio to transcriber...")
+                    transcriber.feed_audio(processed_audio.tobytes())
+                    
+                    # Wait a bit for processing and try to get transcription
+                    import time
+                    time.sleep(0.5)  # Give it time to process
+                    
+                    # Try to get the current transcription
+                    if hasattr(transcriber, 'realtime_text') and transcriber.realtime_text:
+                        transcribed_text = transcriber.realtime_text
+                        logger.info(f"🎤 Got realtime transcription: {transcribed_text}")
+                    elif hasattr(transcriber, 'final_transcription') and transcriber.final_transcription:
+                        transcribed_text = transcriber.final_transcription
+                        logger.info(f"🎤 Got final transcription: {transcribed_text}")
+                    else:
+                        transcribed_text = "[No transcription available yet]"
+                        logger.warning("🎤 No transcription text available from transcriber")
+                else:
+                    transcribed_text = "[Transcriber recorder not initialized]"
+                    logger.error("🎤 Transcriber recorder failed to initialize")
+                
+                logger.info(f"🎤 Transcription result: {transcribed_text}")
+                
+            except Exception as e:
+                logger.error(f"❌ Speech recognition error: {e}")
+                import traceback
+                logger.error(f"❌ Speech recognition traceback: {traceback.format_exc()}")
+                transcribed_text = "[Speech recognition failed]"
+            
             yield {
-                "type": "speech_recognition",
+                "type": "speech_recognition", 
                 "status": "complete",
                 "text": transcribed_text
             }
             
-            # Step 3: LLM processing (placeholder for now)
-            response_text = f"I heard you say: {transcribed_text}. How can I help you today?"
+            # Step 3: Real LLM processing
+            logger.info(f"🤖 Starting LLM processing for: {transcribed_text[:50]}...")
+            
+            try:
+                # Use the global speech pipeline manager's LLM
+                llm = speech_pipeline_manager.llm
+                
+                # Add to conversation history
+                session["conversation_history"].append({"role": "user", "content": transcribed_text})
+                
+                # Generate response using the LLM
+                logger.info(f"🤖 Generating LLM response...")
+                response_generator = llm.generate(
+                    text=transcribed_text,
+                    history=session["conversation_history"],
+                    use_system_prompt=True
+                )
+                
+                # Collect the full response
+                response_parts = []
+                for chunk in response_generator:
+                    response_parts.append(chunk)
+                
+                response_text = "".join(response_parts)
+                
+                # Add assistant response to history
+                session["conversation_history"].append({"role": "assistant", "content": response_text})
+                
+                logger.info(f"🤖 LLM response generated: {response_text[:50]}...")
+                
+            except Exception as e:
+                logger.error(f"❌ LLM processing error: {e}")
+                import traceback
+                logger.error(f"❌ LLM traceback: {traceback.format_exc()}")
+                response_text = "I'm sorry, I'm having trouble processing your request right now."
+            
             yield {
                 "type": "llm_response",
-                "status": "complete",
+                "status": "complete", 
                 "text": response_text
             }
             
