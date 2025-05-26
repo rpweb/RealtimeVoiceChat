@@ -2,6 +2,7 @@ import logging
 import asyncio
 import json
 import os
+import time
 from typing import Dict, Any
 from contextlib import asynccontextmanager
 
@@ -44,6 +45,10 @@ class NoCacheStaticFiles(StaticFiles):
 async def lifespan(app: FastAPI):
     """Manages the application's lifespan."""
     logger.info("🚀 Railway server starting up")
+    
+    # Start the audio buffer flusher task
+    manager._flusher_task = asyncio.create_task(manager._audio_buffer_flusher())
+    logger.info("🧹 Started audio buffer flusher task")
     
     yield
     
@@ -91,6 +96,10 @@ class ConnectionManager:
         self.http_client = httpx.AsyncClient(timeout=30.0)
         # Client state tracking
         self.client_states: Dict[str, dict] = {}
+        # Audio buffering for session management
+        self.audio_buffers: Dict[str, bytearray] = {}
+        self.last_request_time: Dict[str, float] = {}
+        self.min_request_interval = 2.0  # Minimum 2 seconds between RunPod requests
     
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
@@ -101,6 +110,8 @@ class ConnectionManager:
             "tts_playing": False,
             "last_audio_time": 0
         }
+        self.audio_buffers[client_id] = bytearray()
+        self.last_request_time[client_id] = 0
         logger.info(f"🔌 Client {client_id} connected")
     
     def disconnect(self, client_id: str):
@@ -109,6 +120,10 @@ class ConnectionManager:
         # Clean up client state
         if client_id in self.client_states:
             del self.client_states[client_id]
+        if client_id in self.audio_buffers:
+            del self.audio_buffers[client_id]
+        if client_id in self.last_request_time:
+            del self.last_request_time[client_id]
         logger.info(f"🔌 Client {client_id} disconnected")
     
     async def send_to_client(self, client_id: str, message: dict):
@@ -118,9 +133,16 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"❌ Error sending to client {client_id}: {e}")
                 self.disconnect(client_id)
+        else:
+            logger.debug(f"🔇 Attempted to send to disconnected client: {client_id}")
     
     async def process_audio_chunk(self, client_id: str, audio_data: bytes):
-        """Process fixed-size audio chunks with streaming."""
+        """Process audio chunks with intelligent buffering and throttling."""
+        # Check if client is still connected
+        if client_id not in self.active_connections:
+            logger.warning(f"⚠️ Received audio for disconnected client: {client_id}")
+            return
+            
         # Verify chunk size
         if len(audio_data) != MIN_BUFFER_SIZE:
             logger.warning(f"⚠️ Received unexpected audio chunk size: {len(audio_data)} bytes")
@@ -136,36 +158,62 @@ class ConnectionManager:
             self.client_states[client_id]["tts_playing"] = is_tts_playing
             self.client_states[client_id]["last_audio_time"] = timestamp
             
-            # Extract audio samples
+            # Extract audio samples and add to buffer
             audio_samples = audio_data[HEADER_BYTES:]
+            self.audio_buffers[client_id].extend(audio_samples)
             
-            # Send to RunPod with streaming
-            try:
-                import base64
-                audio_b64 = base64.b64encode(audio_samples).decode('utf-8')
+            current_time = time.time()
+            last_request = self.last_request_time[client_id]
+            time_since_last = current_time - last_request
+            buffer_size = len(self.audio_buffers[client_id])
+            
+            # Decide whether to send to RunPod based on:
+            # 1. Minimum time interval (2 seconds)
+            # 2. Buffer size (at least 2 seconds of audio = 96000 bytes)
+            # 3. TTS not playing (don't interrupt)
+            min_buffer_size = 96000  # 2 seconds at 24kHz, 16-bit
+            should_send = (
+                time_since_last >= self.min_request_interval and
+                buffer_size >= min_buffer_size and
+                not is_tts_playing
+            )
+            
+            if should_send:
+                # Send accumulated audio to RunPod
+                buffered_audio = bytes(self.audio_buffers[client_id])
+                self.audio_buffers[client_id].clear()
+                self.last_request_time[client_id] = current_time
                 
-                runpod_payload = {
-                    "input": {
-                        "audio_data": audio_b64,
-                        "client_id": client_id,
-                        "message_type": "audio_batch",
-                        "audio_length": len(audio_samples),
-                        "tts_playing": is_tts_playing,
-                        "timestamp": timestamp
-                    }
-                }
-                
-                logger.info(f"🎵 Processing audio batch: {len(audio_samples)} bytes, TTS playing: {is_tts_playing}")
-                # Use streaming call - this will handle sending chunks to client
-                await self.call_runpod_function(runpod_payload)
+                try:
+                    import base64
+                    audio_b64 = base64.b64encode(buffered_audio).decode('utf-8')
                     
-            except Exception as e:
-                logger.error(f"❌ Error processing audio batch: {e}")
-                await self.send_to_client(client_id, {"type": "error", "message": str(e)})
+                    runpod_payload = {
+                        "input": {
+                            "audio_data": audio_b64,
+                            "client_id": client_id,
+                            "message_type": "audio_batch",
+                            "audio_length": len(buffered_audio),
+                            "tts_playing": is_tts_playing,
+                            "timestamp": timestamp
+                        }
+                    }
+                    
+                    logger.info(f"🎵 Sending {len(buffered_audio)} bytes to RunPod (buffered from {buffer_size} bytes)")
+                    # Use streaming call - this will handle sending chunks to client
+                    await self.call_runpod_function(runpod_payload)
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error processing audio batch: {e}")
+                    if client_id in self.active_connections:
+                        await self.send_to_client(client_id, {"type": "error", "message": str(e)})
+            else:
+                logger.debug(f"🔄 Buffering audio: {buffer_size} bytes, time since last: {time_since_last:.1f}s")
                 
         except Exception as e:
             logger.error(f"❌ Error parsing audio chunk: {e}")
-            await self.send_to_client(client_id, {"type": "error", "message": str(e)})
+            if client_id in self.active_connections:
+                await self.send_to_client(client_id, {"type": "error", "message": str(e)})
     
     async def handle_control_message(self, client_id: str, message: dict):
         """Handle control messages like tts_start, tts_stop, etc."""
@@ -205,7 +253,62 @@ class ConnectionManager:
 
     async def cleanup(self):
         """Clean up resources."""
+        # Cancel the flusher task if it exists
+        if hasattr(self, '_flusher_task'):
+            self._flusher_task.cancel()
+            try:
+                await self._flusher_task
+            except asyncio.CancelledError:
+                pass
         await self.http_client.aclose()
+
+    async def _audio_buffer_flusher(self):
+        """Background task to flush old audio buffers."""
+        while True:
+            try:
+                await asyncio.sleep(5.0)  # Check every 5 seconds
+                current_time = time.time()
+                
+                for client_id in list(self.audio_buffers.keys()):
+                    if client_id not in self.active_connections:
+                        continue
+                        
+                    last_request = self.last_request_time.get(client_id, 0)
+                    buffer_size = len(self.audio_buffers[client_id])
+                    time_since_last = current_time - last_request
+                    
+                    # Flush if buffer has audio and it's been too long
+                    if buffer_size > 0 and time_since_last >= 10.0:  # 10 seconds max wait
+                        logger.info(f"🧹 Flushing stale audio buffer for {client_id}: {buffer_size} bytes")
+                        
+                        buffered_audio = bytes(self.audio_buffers[client_id])
+                        self.audio_buffers[client_id].clear()
+                        self.last_request_time[client_id] = current_time
+                        
+                        try:
+                            import base64
+                            audio_b64 = base64.b64encode(buffered_audio).decode('utf-8')
+                            
+                            runpod_payload = {
+                                "input": {
+                                    "audio_data": audio_b64,
+                                    "client_id": client_id,
+                                    "message_type": "audio_batch",
+                                    "audio_length": len(buffered_audio),
+                                    "tts_playing": False,
+                                    "timestamp": int(current_time * 1000)
+                                }
+                            }
+                            
+                            await self.call_runpod_function(runpod_payload)
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Error flushing audio buffer: {e}")
+                            
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"❌ Error in audio buffer flusher: {e}")
 
     async def call_runpod_function(self, payload: dict) -> dict:
         """Call the RunPod serverless function with streaming support."""
