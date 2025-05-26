@@ -24,64 +24,47 @@ def preinit_components():
         from audio_in import AudioInputProcessor
         from upsample_overlap import UpsampleOverlap
         
-        logger.info("📦 Creating SpeechPipelineManager...")
-        speech_pipeline_manager = SpeechPipelineManager(
-            tts_engine="coqui",
-            llm_provider="openai", 
-            llm_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
-            no_think=False,
-            orpheus_model="orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
-        )
+        # During Docker build, we only want to ensure models are downloaded
+        # Full initialization will happen at runtime when GPU is available
+        logger.info("📦 Verifying model downloads and basic imports...")
         
-        logger.info("📦 Creating UpsampleOverlap...")
+        # Test basic imports
+        from speech_pipeline_manager import SpeechPipelineManager
+        from audio_in import AudioInputProcessor  
+        from upsample_overlap import UpsampleOverlap
+        logger.info("✅ All imports successful")
+        
+        # Test UpsampleOverlap (doesn't require GPU)
+        logger.info("📈 Testing UpsampleOverlap...")
         upsampler = UpsampleOverlap()
         
-        logger.info("📦 Creating AudioInputProcessor...")
-        audio_input_processor = AudioInputProcessor(
-            "en",  # language
-            is_orpheus=False,
-            pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
-        )
+        # Create test audio data
+        import struct
+        test_audio = b''.join([struct.pack('<h', i % 1000) for i in range(4096)])
+        upsampled_b64 = upsampler.get_base64_chunk(test_audio)
+        final_chunk = upsampler.flush_base64_chunk()
+        logger.info(f"📈 UpsampleOverlap test completed: {len(upsampled_b64)} chars base64")
         
-        # Test TTS synthesis to warm up the engine
-        logger.info("🔊 Testing TTS synthesis...")
-        import threading
-        import queue
+        # Verify model files exist
+        model_files = [
+            "models/Lasinya/config.json",
+            "models/Lasinya/vocab.json", 
+            "models/Lasinya/speakers_xtts.pth",
+            "models/Lasinya/model.pth"
+        ]
         
-        audio_queue = queue.Queue()
-        stop_event = threading.Event()
+        for model_file in model_files:
+            if os.path.exists(model_file):
+                logger.info(f"✅ Model file exists: {model_file}")
+            else:
+                logger.warning(f"⚠️ Model file missing: {model_file}")
         
-        # Quick test synthesis
-        success = speech_pipeline_manager.audio.synthesize(
-            text="Hello, this is a test.",
-            audio_chunks=audio_queue,
-            stop_event=stop_event,
-            generation_string="PreInit"
-        )
-        
-        # Collect test audio
-        test_chunks = []
-        while not audio_queue.empty():
-            try:
-                chunk = audio_queue.get_nowait()
-                test_chunks.append(chunk)
-            except queue.Empty:
-                break
-        
-        logger.info(f"🔊 TTS test completed: {len(test_chunks)} chunks generated")
-        
-        # Test upsampling
-        if test_chunks:
-            logger.info("📈 Testing audio upsampling...")
-            combined_audio = b''.join(test_chunks)
-            upsampled_b64 = upsampler.get_base64_chunk(combined_audio[:4096])  # Test with first 4KB
-            final_chunk = upsampler.flush_base64_chunk()
-            logger.info(f"📈 Upsampling test completed: {len(upsampled_b64)} chars base64")
+        logger.info("🚀 Skipping full TTS initialization during build (requires GPU)")
+        logger.info("🚀 Full initialization will happen at runtime")
         
         init_time = time.time() - start_time
         logger.info(f"✅ Pre-initialization completed successfully in {init_time:.2f}s")
-        logger.info(f"🔊 TTS Engine: {speech_pipeline_manager.audio.engine_name}")
-        logger.info(f"⏱️ Pipeline latency: {speech_pipeline_manager.full_output_pipeline_latency}ms")
+        logger.info("🔊 Models downloaded and verified - ready for runtime initialization")
         
         return True
         

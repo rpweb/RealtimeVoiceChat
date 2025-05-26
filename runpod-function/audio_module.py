@@ -120,9 +120,15 @@ class AudioProcessor:
         if engine == "coqui":
             ensure_lasinya_models(models_root="models", model_name="Lasinya")
             
-            # Configure DeepSpeed and thread settings based on platform
+            # Configure DeepSpeed and thread settings based on platform and environment
+            disable_deepspeed = os.getenv('DISABLE_DEEPSPEED', 'false').lower() == 'true'
+            
             if IS_APPLE_SILICON:
                 logger.info("👄🍎 Apple Silicon detected - Optimizing Coqui TTS for MPS backend")
+                use_deepspeed = False
+                thread_count = 4
+            elif disable_deepspeed:
+                logger.info("👄🚫 DeepSpeed disabled via environment variable - Using CPU-only mode")
                 use_deepspeed = False
                 thread_count = 4
             else:
