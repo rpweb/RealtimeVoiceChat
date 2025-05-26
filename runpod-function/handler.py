@@ -142,7 +142,7 @@ class VoiceChatProcessor:
             # Collect all audio chunks
             audio_chunks = []
             start_time = time.time()
-            timeout = 10.0  # 10 second timeout
+            timeout = 60.0  # 60 second timeout - let TTS finish!
             
             while True:
                 try:
