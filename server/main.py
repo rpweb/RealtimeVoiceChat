@@ -357,6 +357,14 @@ class ConnectionManager:
             # Parse the streaming response
             stream_data = stream_response.json()
             
+            # Debug: Log the raw response structure
+            logger.info(f"🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
+            if isinstance(stream_data, dict) and 'output' in stream_data:
+                output_data = stream_data['output']
+                logger.info(f"🔍 Output type: {type(output_data)}, length: {len(output_data) if isinstance(output_data, list) else 'not a list'}")
+                if isinstance(output_data, list) and len(output_data) > 0:
+                    logger.info(f"🔍 First chunk type: {output_data[0].get('type', 'no type') if isinstance(output_data[0], dict) else 'not a dict'}")
+            
             # Handle RunPod's streaming format: {'status': 'COMPLETED', 'output': [...]}
             chunks_to_process = []
             if isinstance(stream_data, dict):
@@ -369,11 +377,14 @@ class ConnectionManager:
                     # Check if output is an array of chunks or a single chunk
                     if isinstance(stream_data['output'], list):
                         chunks_to_process = stream_data['output']  # Use the array directly
+                        logger.info(f"🔍 Using output array with {len(chunks_to_process)} chunks")
                     else:
                         chunks_to_process.append(stream_data['output'])  # Single chunk
+                        logger.info(f"🔍 Using single output chunk")
             elif isinstance(stream_data, list):
                 # Direct array format
                 chunks_to_process = stream_data
+                logger.info(f"🔍 Using direct array format with {len(chunks_to_process)} chunks")
             
             # Send each chunk to the client
             if chunks_to_process:
