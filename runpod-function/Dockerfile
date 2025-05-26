@@ -143,6 +143,23 @@ RUN echo "Preloading SentenceFinishedClassification model..." && \
                 print('Model downloads successful.')" \
     || (echo "Sentence Classifier download failed" && exit 1)
 
+# <<<--- Coqui TTS Model Pre-download --->>>
+RUN echo "Preloading Coqui TTS Lasinya model..." && \
+    python3 -c "from huggingface_hub import hf_hub_download; \
+                import os; \
+                base = 'models/Lasinya'; \
+                os.makedirs(base, exist_ok=True); \
+                files = ['config.json', 'vocab.json', 'speakers_xtts.pth', 'model.pth']; \
+                for fn in files: \
+                    print(f'Downloading {fn}...'); \
+                    hf_hub_download(repo_id='KoljaB/XTTS_Lasinya', filename=fn, local_dir=base); \
+                print('Coqui TTS model download successful.')" \
+    || (echo "Coqui TTS model download failed" && exit 1)
+
+# <<<--- Pre-initialize Speech Pipeline Components --->>>
+RUN echo "Pre-initializing speech pipeline components..." && \
+    python3 preinit.py || (echo "⚠️ Pre-initialization failed, but continuing with build..." && true)
+
 # Create a non-root user and group - DO NOT switch to it here
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid 1001 --create-home appuser
@@ -173,6 +190,9 @@ ENV DS_BUILD_UTILS=0
 ENV DS_BUILD_TRANSFORMER=1
 ENV HF_HOME=${HOME}/.cache/huggingface
 ENV TORCH_HOME=${HOME}/.cache/torch
+ENV TRANSFORMERS_CACHE=${HOME}/.cache/huggingface/transformers
+ENV HF_DATASETS_CACHE=${HOME}/.cache/huggingface/datasets
+ENV RUNPOD_PREINITIALIZED=true
 
 # Expose the port
 EXPOSE 8000

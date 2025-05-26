@@ -3,6 +3,8 @@ import json
 import logging
 import asyncio
 import base64
+import time
+import os
 from typing import Dict, Any, Optional
 
 # Import the core modules from the original code
@@ -20,30 +22,44 @@ audio_input_processor = None
 upsampler = None
 
 def initialize_components():
-    """Initialize the speech processing components."""
+    """Initialize the speech processing components (fast path for pre-built containers)."""
     global speech_pipeline_manager, audio_input_processor, upsampler
     
     if speech_pipeline_manager is None:
-        logger.info("🚀 Initializing RunPod function components...")
+        is_preinitialized = os.getenv("RUNPOD_PREINITIALIZED", "false").lower() == "true"
+        init_type = "pre-initialized" if is_preinitialized else "cold start"
+        logger.info(f"🚀 Initializing RunPod function components ({init_type})...")
+        start_time = time.time()
         
-        # Initialize with default settings
-        speech_pipeline_manager = SpeechPipelineManager(
-            tts_engine="coqui",
-            llm_provider="openai", 
-            llm_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
-            no_think=False,
-            orpheus_model="orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
-        )
-        
-        upsampler = UpsampleOverlap()
-        
-        audio_input_processor = AudioInputProcessor(
-            "en",  # language
-            is_orpheus=False,
-            pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
-        )
-        
-        logger.info("✅ RunPod function components initialized with return_aggregate_stream=FALSE")
+        try:
+            # Initialize with default settings - models should already be downloaded in pre-init
+            speech_pipeline_manager = SpeechPipelineManager(
+                tts_engine="coqui",
+                llm_provider="openai", 
+                llm_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+                no_think=False,
+                orpheus_model="orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
+            )
+            
+            upsampler = UpsampleOverlap()
+            
+            audio_input_processor = AudioInputProcessor(
+                "en",  # language
+                is_orpheus=False,
+                pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
+            )
+            
+            init_time = time.time() - start_time
+            logger.info(f"✅ RunPod function components initialized in {init_time:.2f}s ({init_type})")
+            
+            if is_preinitialized and init_time > 10:
+                logger.warning(f"⚠️ Initialization took {init_time:.2f}s despite pre-initialization - check model caching")
+            
+        except Exception as e:
+            logger.error(f"❌ Error initializing components: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            raise
 
 class VoiceChatProcessor:
     """Handles voice chat processing for RunPod serverless function."""
