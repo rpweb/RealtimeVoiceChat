@@ -365,8 +365,12 @@ class AudioProcessor:
                         try:
                             audio_chunks.put_nowait(c)
                             put_occurred_this_call = True
-                        except asyncio.QueueFull:
-                            logger.warning(f"👄⚠️ {generation_string} Quick audio queue full, dropping chunk.")
+                        except (asyncio.QueueFull, Exception) as e:
+                            # Handle both asyncio.Queue and threading.Queue
+                            if "Full" in str(type(e).__name__) or "full" in str(e).lower():
+                                logger.warning(f"👄⚠️ {generation_string} Quick audio queue full, dropping chunk.")
+                            else:
+                                logger.warning(f"👄⚠️ {generation_string} Quick audio queue error: {e}")
                     buffer.clear()
                     buf_dur = 0.0 # Reset buffer duration
                     buffering = False # Stop buffering mode
@@ -374,8 +378,12 @@ class AudioProcessor:
                 try:
                     audio_chunks.put_nowait(chunk)
                     put_occurred_this_call = True
-                except asyncio.QueueFull:
-                    logger.warning(f"👄⚠️ {generation_string} Quick audio queue full, dropping chunk.")
+                except (asyncio.QueueFull, Exception) as e:
+                    # Handle both asyncio.Queue and threading.Queue
+                    if "Full" in str(type(e).__name__) or "full" in str(e).lower():
+                        logger.warning(f"👄⚠️ {generation_string} Quick audio queue full, dropping chunk.")
+                    else:
+                        logger.warning(f"👄⚠️ {generation_string} Quick audio queue error: {e}")
 
 
             # --- First Chunk Callback ---
@@ -425,8 +433,12 @@ class AudioProcessor:
             for c in buffer:
                  try:
                     audio_chunks.put_nowait(c)
-                 except asyncio.QueueFull:
-                    logger.warning(f"👄⚠️ {generation_string} Quick audio queue full on final flush, dropping chunk.")
+                 except (asyncio.QueueFull, Exception) as e:
+                    # Handle both asyncio.Queue and threading.Queue
+                    if "Full" in str(type(e).__name__) or "full" in str(e).lower():
+                        logger.warning(f"👄⚠️ {generation_string} Quick audio queue full on final flush, dropping chunk.")
+                    else:
+                        logger.warning(f"👄⚠️ {generation_string} Quick audio queue error on final flush: {e}")
             buffer.clear()
 
         logger.info(f"👄✅ {generation_string} Quick answer synthesis complete. Text: {text[:50]}...")
@@ -540,8 +552,12 @@ class AudioProcessor:
                         try:
                            audio_chunks.put_nowait(c)
                            put_occurred_this_call = True
-                        except asyncio.QueueFull:
-                            logger.warning(f"👄⚠️ {generation_string} Final audio queue full, dropping chunk.")
+                        except (asyncio.QueueFull, Exception) as e:
+                            # Handle both asyncio.Queue and threading.Queue
+                            if "Full" in str(type(e).__name__) or "full" in str(e).lower():
+                                logger.warning(f"👄⚠️ {generation_string} Final audio queue full, dropping chunk.")
+                            else:
+                                logger.warning(f"👄⚠️ {generation_string} Final audio queue error: {e}")
                     buffer.clear()
                     buf_dur = 0.0
                     buffering = False
@@ -549,8 +565,12 @@ class AudioProcessor:
                 try:
                     audio_chunks.put_nowait(chunk)
                     put_occurred_this_call = True
-                except asyncio.QueueFull:
-                    logger.warning(f"👄⚠️ {generation_string} Final audio queue full, dropping chunk.")
+                except (asyncio.QueueFull, Exception) as e:
+                    # Handle both asyncio.Queue and threading.Queue
+                    if "Full" in str(type(e).__name__) or "full" in str(e).lower():
+                        logger.warning(f"👄⚠️ {generation_string} Final audio queue full, dropping chunk.")
+                    else:
+                        logger.warning(f"👄⚠️ {generation_string} Final audio queue error: {e}")
 
 
             # --- First Chunk Callback --- (Using the same callback as synthesize)
@@ -603,8 +623,12 @@ class AudioProcessor:
             for c in buffer:
                 try:
                    audio_chunks.put_nowait(c)
-                except asyncio.QueueFull:
-                   logger.warning(f"👄⚠️ {generation_string} Final audio queue full on final flush, dropping chunk.")
+                except (asyncio.QueueFull, Exception) as e:
+                   # Handle both asyncio.Queue and threading.Queue
+                   if "Full" in str(type(e).__name__) or "full" in str(e).lower():
+                       logger.warning(f"👄⚠️ {generation_string} Final audio queue full on final flush, dropping chunk.")
+                   else:
+                       logger.warning(f"👄⚠️ {generation_string} Final audio queue error on final flush: {e}")
             buffer.clear()
 
         logger.info(f"👄✅ {generation_string} Final answer synthesis complete.")
