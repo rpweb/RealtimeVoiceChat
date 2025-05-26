@@ -346,11 +346,11 @@ class ConnectionManager:
             
             logger.info(f"🚀 Started streaming job: {job_id}")
             
-            # Step 2: Stream results with optimized timeout
+            # Step 2: Stream results in real-time
             stream_response = await self.http_client.get(
                 f"{base_url}/{endpoint_id}/stream/{job_id}",
                 headers=headers,
-                timeout=15.0  # Reduced from 30.0s to 15.0s
+                timeout=30.0  # Increased timeout for real-time streaming
             )
             stream_response.raise_for_status()
             

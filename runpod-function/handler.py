@@ -296,5 +296,5 @@ def handler(job):
 if __name__ == "__main__":
     runpod.serverless.start({
         "handler": handler,
-        "return_aggregate_stream": True  # Enable streaming!
+        "return_aggregate_stream": False  # Enable real-time streaming!
     }) 
