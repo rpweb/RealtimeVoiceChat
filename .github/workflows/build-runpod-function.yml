@@ -3,6 +3,9 @@ name: Build and Push RunPod Function
 on:
   push:
     branches: [ main, custom-openapi-serverless-runpod-railway ]
+    paths:
+      - 'runpod-function/**'
+      - '.github/workflows/build-runpod-function.yml'
   workflow_dispatch:
 
 env:

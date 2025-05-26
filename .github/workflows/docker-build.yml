@@ -3,6 +3,11 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [ main, custom-openai-serverless ]  # Adjust this to your primary branch name if needed
+    paths:
+      - 'code/**'
+      - '.github/workflows/docker-build.yml'
+      - 'Dockerfile'
+      - 'requirements.txt'
   workflow_dispatch:  # Allows manual triggering from GitHub UI
 
 jobs:
