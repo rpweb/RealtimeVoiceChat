@@ -1,5 +1,5 @@
 # Use the official RunPod Python base image with CUDA 12.1.1 support
-FROM runpod/pytorch:2.1.0-py3.10-cuda12.1.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 # Set working directory
 WORKDIR /app
