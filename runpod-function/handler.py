@@ -6,6 +6,7 @@ import base64
 import time
 import os
 from typing import Dict, Any, Optional
+import threading
 
 # Import the core modules from the original code
 from speech_pipeline_manager import SpeechPipelineManager
@@ -20,19 +21,30 @@ logger = logging.getLogger(__name__)
 speech_pipeline_manager = None
 audio_input_processor = None
 upsampler = None
+_initialization_lock = threading.Lock()
+_initialization_complete = False
 
 def initialize_components():
-    """Initialize the speech processing components (fast path for pre-built containers)."""
-    global speech_pipeline_manager, audio_input_processor, upsampler
+    """Initialize the speech processing components with optimized loading."""
+    global speech_pipeline_manager, audio_input_processor, upsampler, _initialization_complete
     
-    if speech_pipeline_manager is None:
+    # Use lock to prevent multiple simultaneous initializations
+    with _initialization_lock:
+        if _initialization_complete:
+            return
+            
         is_preinitialized = os.getenv("RUNPOD_PREINITIALIZED", "false").lower() == "true"
         init_type = "pre-initialized" if is_preinitialized else "cold start"
         logger.info(f"🚀 Initializing RunPod function components ({init_type})...")
         start_time = time.time()
         
         try:
-            # Initialize with default settings - models should already be downloaded in pre-init
+            # Initialize upsampler first (fastest)
+            logger.info("📈 Initializing upsampler...")
+            upsampler = UpsampleOverlap()
+            
+            # Initialize speech pipeline manager (heaviest component)
+            logger.info("🗣️ Initializing speech pipeline manager...")
             speech_pipeline_manager = SpeechPipelineManager(
                 tts_engine="coqui",
                 llm_provider="openai", 
@@ -41,25 +53,32 @@ def initialize_components():
                 orpheus_model="orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
             )
             
-            upsampler = UpsampleOverlap()
-            
+            # Initialize audio input processor last
+            logger.info("🎤 Initializing audio input processor...")
             audio_input_processor = AudioInputProcessor(
                 "en",  # language
                 is_orpheus=False,
                 pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
             )
             
+            _initialization_complete = True
             init_time = time.time() - start_time
             logger.info(f"✅ RunPod function components initialized in {init_time:.2f}s ({init_type})")
             
-            if is_preinitialized and init_time > 10:
-                logger.warning(f"⚠️ Initialization took {init_time:.2f}s despite pre-initialization - check model caching")
+            if is_preinitialized and init_time > 15:
+                logger.warning(f"⚠️ Initialization took {init_time:.2f}s despite pre-initialization - this is expected for first GPU load")
             
         except Exception as e:
             logger.error(f"❌ Error initializing components: {e}")
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             raise
+
+def get_components():
+    """Get initialized components, initializing if necessary."""
+    if not _initialization_complete:
+        initialize_components()
+    return speech_pipeline_manager, audio_input_processor, upsampler
 
 class VoiceChatProcessor:
     """Handles voice chat processing for RunPod serverless function."""
@@ -357,8 +376,8 @@ processor = VoiceChatProcessor()
 def handler(job):
     """Main RunPod handler function with streaming support."""
     try:
-        # Initialize components if not already done
-        initialize_components()
+        # Get initialized components (lazy initialization)
+        speech_pipeline_manager, audio_input_processor, upsampler = get_components()
         
         # Extract input data
         input_data = job.get("input", {})
@@ -429,6 +448,15 @@ def handler(job):
 
 # Start the RunPod serverless function with streaming enabled
 if __name__ == "__main__":
+    # Pre-initialize components on startup to reduce first request latency
+    logger.info("🚀 Starting RunPod function - beginning component initialization...")
+    try:
+        initialize_components()
+        logger.info("✅ Component initialization complete - ready for requests")
+    except Exception as e:
+        logger.error(f"❌ Startup initialization failed: {e}")
+        # Continue anyway - components will be initialized on first request
+    
     runpod.serverless.start({
         "handler": handler,
         "return_aggregate_stream": False  # Enable real-time streaming!
