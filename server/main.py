@@ -357,7 +357,7 @@ class ConnectionManager:
             # Parse the streaming response
             stream_data = stream_response.json()
             
-            # Handle RunPod's streaming format: {'status': 'IN_PROGRESS', 'stream': [...]}
+            # Handle RunPod's streaming format: {'status': 'COMPLETED', 'output': [...]}
             chunks_to_process = []
             if isinstance(stream_data, dict):
                 if 'stream' in stream_data and isinstance(stream_data['stream'], list):
@@ -366,8 +366,11 @@ class ConnectionManager:
                         if 'output' in stream_item:
                             chunks_to_process.append(stream_item['output'])
                 elif 'output' in stream_data:
-                    # Single output item
-                    chunks_to_process.append(stream_data['output'])
+                    # Check if output is an array of chunks or a single chunk
+                    if isinstance(stream_data['output'], list):
+                        chunks_to_process = stream_data['output']  # Use the array directly
+                    else:
+                        chunks_to_process.append(stream_data['output'])  # Single chunk
             elif isinstance(stream_data, list):
                 # Direct array format
                 chunks_to_process = stream_data
