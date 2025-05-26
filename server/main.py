@@ -358,7 +358,7 @@ class ConnectionManager:
             stream_data = stream_response.json()
             
             # Debug: Log the raw response structure
-            logger.info(f"🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
+            logger.info(f"🔍🔍🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
             
             # Handle RunPod's streaming format: {'status': 'IN_PROGRESS', 'stream': [...]}
             chunks_to_process = []
