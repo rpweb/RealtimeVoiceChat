@@ -359,20 +359,18 @@ class ConnectionManager:
             
             # Debug: Log the raw response structure
             logger.info(f"🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
-            if isinstance(stream_data, dict) and 'output' in stream_data:
-                output_data = stream_data['output']
-                logger.info(f"🔍 Output type: {type(output_data)}, length: {len(output_data) if isinstance(output_data, list) else 'not a list'}")
-                if isinstance(output_data, list) and len(output_data) > 0:
-                    logger.info(f"🔍 First chunk type: {output_data[0].get('type', 'no type') if isinstance(output_data[0], dict) else 'not a dict'}")
             
-            # Handle RunPod's streaming format: {'status': 'COMPLETED', 'output': [...]}
+            # Handle RunPod's streaming format: {'status': 'IN_PROGRESS', 'stream': [...]}
             chunks_to_process = []
             if isinstance(stream_data, dict):
                 if 'stream' in stream_data and isinstance(stream_data['stream'], list):
-                    # Extract chunks from the stream array
-                    for stream_item in stream_data['stream']:
-                        if 'output' in stream_item:
+                    # Extract chunks from the stream array - each item should have 'output'
+                    logger.info(f"🔍 Stream array length: {len(stream_data['stream'])}")
+                    for i, stream_item in enumerate(stream_data['stream']):
+                        logger.info(f"🔍 Stream item {i}: {list(stream_item.keys()) if isinstance(stream_item, dict) else 'not a dict'}")
+                        if isinstance(stream_item, dict) and 'output' in stream_item:
                             chunks_to_process.append(stream_item['output'])
+                            logger.info(f"🔍 Added chunk {i}: {stream_item['output'].get('type', 'no type') if isinstance(stream_item['output'], dict) else 'not a dict'}")
                 elif 'output' in stream_data:
                     # Check if output is an array of chunks or a single chunk
                     if isinstance(stream_data['output'], list):
