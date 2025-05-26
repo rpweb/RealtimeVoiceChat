@@ -119,6 +119,9 @@ class VoiceChatProcessor:
                 try:
                     # Use the global speech_pipeline_manager's audio processor
                     audio_processor = speech_pipeline_manager.audio
+                    logger.info(f"🔊 TTS worker starting synthesis for: {response_text[:50]}...")
+                    logger.info(f"🔊 Audio processor engine: {audio_processor.engine_name}")
+                    
                     success = audio_processor.synthesize(
                         text=response_text,
                         audio_chunks=audio_queue,
@@ -128,6 +131,8 @@ class VoiceChatProcessor:
                     logger.info(f"🔊 TTS synthesis completed: {success}")
                 except Exception as e:
                     logger.error(f"❌ TTS synthesis error: {e}")
+                    import traceback
+                    logger.error(f"❌ TTS synthesis traceback: {traceback.format_exc()}")
                     stop_event.set()
             
             # Start TTS generation in background
@@ -167,12 +172,27 @@ class VoiceChatProcessor:
                     first_samples = list(combined_audio[:10])
                     logger.info(f"🔊 First 10 bytes: {first_samples}")
             else:
-                # Fallback to silence if no audio generated
-                logger.warning("⚠️ No TTS audio generated, using silence")
-                silence_samples = 24000  # 1 second of silence at 24kHz
-                silence_audio = b'\x00' * (silence_samples * 2)  # 16-bit samples
-                audio_b64 = base64.b64encode(silence_audio).decode('utf-8')
-                logger.info(f"🔊 Using {len(silence_audio)} bytes of silence audio")
+                # Fallback: Generate a simple test tone instead of silence
+                logger.warning("⚠️ No TTS audio generated, using test tone")
+                import math
+                import struct
+                
+                # Generate a 1-second 440Hz sine wave at 24kHz, 16-bit
+                sample_rate = 24000
+                frequency = 440  # A4 note
+                duration = 1.0  # 1 second
+                samples = int(sample_rate * duration)
+                
+                audio_data = []
+                for i in range(samples):
+                    # Generate sine wave sample
+                    t = i / sample_rate
+                    sample = int(16383 * math.sin(2 * math.pi * frequency * t))  # 16-bit range
+                    audio_data.append(struct.pack('<h', sample))  # Little-endian 16-bit
+                
+                combined_audio = b''.join(audio_data)
+                audio_b64 = base64.b64encode(combined_audio).decode('utf-8')
+                logger.info(f"🔊 Using {len(combined_audio)} bytes of test tone audio (440Hz sine wave)")
             
             yield {
                 "type": "tts_generation",
