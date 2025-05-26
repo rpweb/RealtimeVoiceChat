@@ -33,8 +33,7 @@ The Docker image is automatically built and pushed to Docker Hub via GitHub Acti
 
 1. **Build locally**:
    ```bash
-   export DOCKERHUB_USERNAME=yourusername
-   ./build.sh
+   docker build -t yourusername/realtime-voice-chat-runpod:latest .
    docker push yourusername/realtime-voice-chat-runpod:latest
    ```
 

@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     libportaudio2 \
     portaudio19-dev \
-    python3-pyaudio \
     python3-setuptools \
     python3.10-distutils \
     ninja-build \
