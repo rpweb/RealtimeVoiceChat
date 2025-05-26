@@ -122,9 +122,8 @@ class SpeechPipelineManager:
     def __init__(
             self,
             tts_engine: str = "kokoro",
-            llm_provider: str = "ollama",
-            # llm_model: str = "hf.co/bartowski/huihui-ai_Mistral-Small-24B-Instruct-2501-abliterated-GGUF:Q4_K_M",
-            llm_model: str = "gemma2:2b",
+            llm_provider: str = "openai",
+            llm_model: str = "Qwen/Qwen2.5-7B-Instruct-AWQ",
             no_think: bool = False,
             orpheus_model: str = "orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
         ):
@@ -137,7 +136,7 @@ class SpeechPipelineManager:
 
         Args:
             tts_engine: The TTS engine to use (e.g., "kokoro", "orpheus").
-            llm_provider: The LLM backend provider (e.g., "ollama").
+            llm_provider: The LLM backend provider (only "openai" is supported).
             llm_model: The specific LLM model identifier.
             no_think: If True, removes specific thinking tags from LLM output.
             orpheus_model: Path or identifier for the Orpheus TTS model, if used.

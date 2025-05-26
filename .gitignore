@@ -22,7 +22,7 @@ Thumbs.db
 # Project specific
 *.log
 logs/
-ollama_models/
+
 .cache/
 wheels/
 

@@ -13,5 +13,4 @@ uvicorn
 python-dotenv
 
 # llm providers
-ollama
 openai
