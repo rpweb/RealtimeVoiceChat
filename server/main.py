@@ -346,17 +346,42 @@ class ConnectionManager:
             
             logger.info(f"🚀 Started streaming job: {job_id}")
             
-            # Step 2: Get streaming response (RunPod returns single JSON, not SSE)
-            stream_response = await self.http_client.get(
-                f"{base_url}/{endpoint_id}/stream/{job_id}",
-                headers=headers,
-                timeout=30.0
-            )
-            stream_response.raise_for_status()
+            # Step 2: Wait for job completion to get ALL chunks
+            max_wait_time = 90.0  # Wait up to 90 seconds for TTS
+            poll_interval = 2.0   # Check every 2 seconds
+            start_time = time.time()
             
-            # Parse the streaming response
-            stream_data = stream_response.json()
-            logger.info(f"📡 Received streaming chunk: {stream_data}")
+            while time.time() - start_time < max_wait_time:
+                # Check job status
+                status_response = await self.http_client.get(
+                    f"{base_url}/{endpoint_id}/status/{job_id}",
+                    headers=headers,
+                    timeout=10.0
+                )
+                status_response.raise_for_status()
+                status_data = status_response.json()
+                
+                job_status = status_data.get('status', 'UNKNOWN')
+                logger.info(f"🔄 Job {job_id} status: {job_status}")
+                
+                if job_status == 'COMPLETED':
+                    # Job completed! Now get the stream with ALL chunks
+                    stream_response = await self.http_client.get(
+                        f"{base_url}/{endpoint_id}/stream/{job_id}",
+                        headers=headers,
+                        timeout=10.0
+                    )
+                    stream_response.raise_for_status()
+                    stream_data = stream_response.json()
+                    logger.info(f"📡 Job completed! Got stream data: {stream_data}")
+                    break
+                elif job_status in ['FAILED', 'CANCELLED', 'TIMED_OUT']:
+                    raise ValueError(f"Job failed with status: {job_status}")
+                
+                # Wait before checking again
+                await asyncio.sleep(poll_interval)
+            else:
+                raise TimeoutError(f"Job {job_id} did not complete within {max_wait_time} seconds")
             
             # Debug: Log the raw response structure
             logger.info(f"🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
