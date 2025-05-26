@@ -133,30 +133,67 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         while True:
-            # Receive message from client
-            data = await websocket.receive_text()
-            message = json.loads(data)
+            # Receive message from client (can be text or binary)
+            message = await websocket.receive()
             
-            # Forward to RunPod function
-            try:
-                runpod_payload = {
-                    "input": {
-                        "message": message,
-                        "client_id": client_id
-                    }
-                }
+            if message["type"] == "websocket.receive":
+                if "text" in message:
+                    # Handle JSON text messages (control messages)
+                    try:
+                        json_message = json.loads(message["text"])
+                        logger.info(f"📝 Received text message: {json_message}")
+                        
+                        # Forward to RunPod function
+                        runpod_payload = {
+                            "input": {
+                                "message": json_message,
+                                "client_id": client_id,
+                                "message_type": "text"
+                            }
+                        }
+                        
+                        result = await manager.call_runpod_function(runpod_payload)
+                        
+                        # Send result back to client
+                        if "output" in result:
+                            await manager.send_to_client(client_id, result["output"])
+                        else:
+                            await manager.send_to_client(client_id, {"error": "No output from RunPod function"})
+                            
+                    except json.JSONDecodeError as e:
+                        logger.error(f"❌ Invalid JSON: {e}")
+                        await manager.send_to_client(client_id, {"error": "Invalid JSON format"})
+                    except Exception as e:
+                        logger.error(f"❌ Error processing text message: {e}")
+                        await manager.send_to_client(client_id, {"error": str(e)})
                 
-                result = await manager.call_runpod_function(runpod_payload)
-                
-                # Send result back to client
-                if "output" in result:
-                    await manager.send_to_client(client_id, result["output"])
-                else:
-                    await manager.send_to_client(client_id, {"error": "No output from RunPod function"})
+                elif "bytes" in message:
+                    # Handle binary audio data
+                    audio_data = message["bytes"]
+                    logger.debug(f"🎵 Received audio data: {len(audio_data)} bytes")
                     
-            except Exception as e:
-                logger.error(f"❌ Error processing message: {e}")
-                await manager.send_to_client(client_id, {"error": str(e)})
+                    # Forward audio to RunPod function
+                    try:
+                        import base64
+                        audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+                        
+                        runpod_payload = {
+                            "input": {
+                                "audio_data": audio_b64,
+                                "client_id": client_id,
+                                "message_type": "audio"
+                            }
+                        }
+                        
+                        result = await manager.call_runpod_function(runpod_payload)
+                        
+                        # Send result back to client
+                        if "output" in result:
+                            await manager.send_to_client(client_id, result["output"])
+                            
+                    except Exception as e:
+                        logger.error(f"❌ Error processing audio: {e}")
+                        await manager.send_to_client(client_id, {"error": str(e)})
                 
     except WebSocketDisconnect:
         manager.disconnect(client_id)
