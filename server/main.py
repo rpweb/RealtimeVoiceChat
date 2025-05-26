@@ -38,7 +38,14 @@ class NoCacheStaticFiles(StaticFiles):
 async def lifespan(app: FastAPI):
     """Manages the application's lifespan."""
     logger.info("🚀 Railway server starting up")
+    # Start the audio buffer flusher task
+    manager._flusher_task = asyncio.create_task(manager._audio_buffer_flusher())
+    logger.info("🧹 Started audio buffer flusher task")
+    
     yield
+    
+    # Clean up on shutdown
+    await manager.cleanup()
     logger.info("⏹️ Railway server shutting down")
 
 # FastAPI app instance
@@ -82,8 +89,7 @@ class ConnectionManager:
         # Audio buffering per client
         self.audio_buffers: Dict[str, bytearray] = {}
         self.client_states: Dict[str, dict] = {}
-        # Start background task for flushing audio buffers
-        asyncio.create_task(self._audio_buffer_flusher())
+        self._flusher_task = None  # Will be set when the app starts
     
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
@@ -202,6 +208,16 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"❌ Error processing control message: {e}")
             await self.send_to_client(client_id, {"error": str(e)})
+
+    async def cleanup(self):
+        """Clean up resources."""
+        if self._flusher_task:
+            self._flusher_task.cancel()
+            try:
+                await self._flusher_task
+            except asyncio.CancelledError:
+                pass
+        await self.http_client.aclose()
 
     async def _audio_buffer_flusher(self):
         """Background task to flush audio buffers after timeout."""
