@@ -1,10 +1,10 @@
-# Use CUDA 12.1.1 base image
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+# Stage 1: Builder Stage - Install dependencies including build tools and CUDA toolkit components
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04 AS builder
 
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.10, pip, and system dependencies
+# Install Python 3.10, pip, build essentials, git, and other system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     python3-pip \
@@ -50,24 +50,57 @@ RUN echo "Building DeepSpeed with flags: DS_BUILD_TRANSFORMER=${DS_BUILD_TRANSFO
     pip install --no-cache-dir deepspeed \
     || (echo "DeepSpeed install failed. Check build logs above." && exit 1)
 
-# Copy requirements and install Python dependencies
+# Copy requirements file first to leverage Docker cache
 COPY requirements.txt .
+
+# Install remaining Python dependencies from requirements.txt
 RUN pip install --no-cache-dir --prefer-binary -r requirements.txt \
     || (echo "pip install -r requirements.txt FAILED." && exit 1)
 
 # Pin ctranslate2 to a compatible version
 RUN pip install --no-cache-dir "ctranslate2<4.5.0"
 
-# Copy all application files
+# Copy the application code
 COPY . .
 
-# Clean up to reduce image size
-RUN apt-get autoremove -y \
-    && apt-get autoclean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/* \
-    && rm -rf /var/tmp/* \
-    && pip cache purge
+# --- Stage 2: Runtime Stage ---
+# Base image still needs CUDA toolkit for PyTorch/DeepSpeed/etc in the app
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+# Avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies for the APP + gosu
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3.10-dev \
+    libsndfile1 \
+    ffmpeg \
+    libportaudio2 \
+    python3-setuptools \
+    python3.10-distutils \
+    ninja-build \
+    build-essential \
+    g++ \
+    curl \
+    gosu \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make python3.10 the default python
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Set working directory for the application
+WORKDIR /app
+
+# Copy installed Python packages from the builder stage
+RUN mkdir -p /usr/local/lib/python3.10/dist-packages
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+
+# Copy the application code from the builder stage
+COPY --from=builder /app .
 
 # <<<--- Model Pre-downloads for faster cold starts --->>>
 # <<<--- Silero VAD Pre-download --->>>
@@ -110,27 +143,39 @@ RUN echo "Preloading SentenceFinishedClassification model..." && \
                 print('Model downloads successful.')" \
     || (echo "Sentence Classifier download failed" && exit 1)
 
+# Create a non-root user and group - DO NOT switch to it here
+RUN groupadd --gid 1001 appgroup && \
+    useradd --uid 1001 --gid 1001 --create-home appuser
+
+# Ensure directories are owned by appuser - This prepares the image layers correctly
+# The entrypoint will handle runtime permissions for volumes/cache
+RUN mkdir -p /home/appuser/.cache && \
+    chown -R appuser:appgroup /app && \
+    chown -R appuser:appgroup /home/appuser && \
+    # Also chown the caches potentially populated by root during build
+    if [ -d /root/.cache ]; then chown -R appuser:appgroup /root/.cache; fi
+
+# --- REMOVED USER appuser --- The container will start as root.
+
 # --- Keep ENV vars ---
-ENV PYTHONPATH=/app
+ENV HOME=/home/appuser
 ENV CUDA_HOME=/usr/local/cuda
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
 ENV PYTHONUNBUFFERED=1
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV RUNNING_IN_DOCKER=true
 ENV DS_BUILD_OPS=1
 ENV DS_BUILD_CPU_ADAM=0
 ENV DS_BUILD_FUSED_ADAM=0
 ENV DS_BUILD_UTILS=0
 ENV DS_BUILD_TRANSFORMER=1
-ENV HF_HOME=/app/.cache/huggingface
-ENV TORCH_HOME=/app/.cache/torch
+ENV HF_HOME=${HOME}/.cache/huggingface
+ENV TORCH_HOME=${HOME}/.cache/torch
 
-# Create cache directories
-RUN mkdir -p /app/.cache/huggingface /app/.cache/torch
-
-# Expose port
+# Expose the port
 EXPOSE 8000
 
-# Command to run the handler
+# Command to run the handler (changed from original uvicorn server)
 CMD ["python", "handler.py"] 
