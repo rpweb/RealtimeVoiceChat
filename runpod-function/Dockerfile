@@ -130,31 +130,51 @@ EOF
 ARG WHISPER_MODEL=base.en
 ENV WHISPER_MODEL=${WHISPER_MODEL}
 RUN echo "Preloading faster_whisper model: ${WHISPER_MODEL}" && \
-    python3 -c "import os; print(f\"Downloading STT model: {os.getenv('WHISPER_MODEL')}\"); import faster_whisper; model = faster_whisper.WhisperModel(os.getenv('WHISPER_MODEL'), device='cpu'); print('Model download successful.')" \
-    || (echo "Faster Whisper download failed" && exit 1)
+    python3 <<EOF
+import os
+import faster_whisper
+try:
+    model_name = os.getenv('WHISPER_MODEL')
+    print(f"Downloading STT model: {model_name}")
+    model = faster_whisper.WhisperModel(model_name, device='cpu')
+    print('Model download successful.')
+except Exception as e:
+    print(f'Error downloading faster_whisper model: {e}')
+    exit(1)
+EOF
 
 # <<<--- SentenceFinishedClassification Pre-download --->>>
 RUN echo "Preloading SentenceFinishedClassification model..." && \
-    python3 -c "from transformers import DistilBertTokenizerFast, DistilBertForSequenceClassification; \
-                print('Downloading tokenizer...'); \
-                tokenizer = DistilBertTokenizerFast.from_pretrained('KoljaB/SentenceFinishedClassification'); \
-                print('Downloading classification model...'); \
-                model = DistilBertForSequenceClassification.from_pretrained('KoljaB/SentenceFinishedClassification'); \
-                print('Model downloads successful.')" \
-    || (echo "Sentence Classifier download failed" && exit 1)
+    python3 <<EOF
+from transformers import DistilBertTokenizerFast, DistilBertForSequenceClassification
+try:
+    print('Downloading tokenizer...')
+    tokenizer = DistilBertTokenizerFast.from_pretrained('KoljaB/SentenceFinishedClassification')
+    print('Downloading classification model...')
+    model = DistilBertForSequenceClassification.from_pretrained('KoljaB/SentenceFinishedClassification')
+    print('Model downloads successful.')
+except Exception as e:
+    print(f'Error downloading SentenceFinishedClassification: {e}')
+    exit(1)
+EOF
 
 # <<<--- Coqui TTS Model Pre-download --->>>
 RUN echo "Preloading Coqui TTS Lasinya model..." && \
-    python3 -c "from huggingface_hub import hf_hub_download; \
-                import os; \
-                base = 'models/Lasinya'; \
-                os.makedirs(base, exist_ok=True); \
-                files = ['config.json', 'vocab.json', 'speakers_xtts.pth', 'model.pth']; \
-                for fn in files: \
-                    print(f'Downloading {fn}...'); \
-                    hf_hub_download(repo_id='KoljaB/XTTS_Lasinya', filename=fn, local_dir=base); \
-                print('Coqui TTS model download successful.')" \
-    || (echo "Coqui TTS model download failed" && exit 1)
+    python3 <<EOF
+from huggingface_hub import hf_hub_download
+import os
+try:
+    base = 'models/Lasinya'
+    os.makedirs(base, exist_ok=True)
+    files = ['config.json', 'vocab.json', 'speakers_xtts.pth', 'model.pth']
+    for fn in files:
+        print(f'Downloading {fn}...')
+        hf_hub_download(repo_id='KoljaB/XTTS_Lasinya', filename=fn, local_dir=base)
+    print('Coqui TTS model download successful.')
+except Exception as e:
+    print(f'Error downloading Coqui TTS model: {e}')
+    exit(1)
+EOF
 
 # <<<--- Pre-initialize Speech Pipeline Components --->>>
 RUN echo "Pre-initializing speech pipeline components..." && \
