@@ -156,38 +156,57 @@ def handler(event):
         
         # Extract input data
         input_data = event.get("input", {})
-        message = input_data.get("message", {})
-        client_id = input_data.get("client_id", "unknown")
-        
-        message_type = message.get("type", "")
+        if not input_data:
+            raise ValueError("No input data provided")
+            
+        client_id = input_data.get("client_id")
+        if not client_id:
+            raise ValueError("No client_id provided")
+            
+        # Extract message type directly from input_data
+        message_type = input_data.get("message_type", "")
         
         logger.info(f"🔄 Processing message type: {message_type} for client: {client_id}")
         
         # Route based on message type
-        if message_type == "audio_data":
-            audio_data = message.get("data", "")
+        if message_type == "audio_batch":
+            audio_data = input_data.get("audio_data")
+            if not audio_data:
+                raise ValueError("No audio_data provided")
+                
+            tts_playing = input_data.get("tts_playing", False)
+            timestamp = input_data.get("timestamp")
+            
             result = processor.process_audio_data(client_id, audio_data)
             
-        elif message_type == "text_message":
-            text = message.get("text", "")
-            result = processor.process_text_message(client_id, text)
-            
-        elif message_type == "synthesize_speech":
-            text = message.get("text", "")
-            result = processor.synthesize_speech(client_id, text)
-            
-        elif message_type == "ping":
-            result = {
-                "type": "pong",
-                "status": "success",
-                "timestamp": str(asyncio.get_event_loop().time())
-            }
-            
+        elif message_type == "control":
+            message = input_data.get("message", {})
+            if not message:
+                raise ValueError("No control message provided")
+                
+            control_type = message.get("type", "")
+            if control_type == "clear_history":
+                result = {
+                    "type": "control_response",
+                    "status": "success",
+                    "message": "History cleared"
+                }
+            elif control_type == "set_speed":
+                speed = message.get("speed", 1.0)
+                result = {
+                    "type": "control_response",
+                    "status": "success",
+                    "message": f"Speed set to {speed}"
+                }
+            else:
+                result = {
+                    "type": "control_response",
+                    "status": "success",
+                    "message": f"Control message {control_type} processed"
+                }
+                
         else:
-            result = {
-                "type": "error",
-                "message": f"Unknown message type: {message_type}"
-            }
+            raise ValueError(f"Unknown message type: {message_type}")
         
         return {"output": result}
         
@@ -196,7 +215,7 @@ def handler(event):
         return {
             "output": {
                 "type": "error",
-                "message": f"Handler failed: {str(e)}"
+                "message": str(e)
             }
         }
 

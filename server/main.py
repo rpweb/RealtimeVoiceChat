@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "")
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY", "")
 
+# Audio processing configuration
+BATCH_SAMPLES = 2048  # Match client's batch size
+HEADER_BYTES = 8      # Match client's header size
+FRAME_BYTES = BATCH_SAMPLES * 2  # 16-bit samples = 2 bytes per sample
+MIN_BUFFER_SIZE = FRAME_BYTES + HEADER_BYTES  # Total expected message size
+
 if not RUNPOD_ENDPOINT or not RUNPOD_API_KEY:
     logger.warning("⚠️ RunPod endpoint or API key not configured. Set RUNPOD_ENDPOINT and RUNPOD_API_KEY environment variables.")
 
@@ -122,41 +128,45 @@ class ConnectionManager:
                 self.disconnect(client_id)
     
     async def process_audio_chunk(self, client_id: str, audio_data: bytes):
-        """Buffer audio chunks and send to RunPod when appropriate."""
+        """Process fixed-size audio chunks with header information."""
         if client_id not in self.audio_buffers:
             return
-        
-        # Add audio to buffer
-        self.audio_buffers[client_id].extend(audio_data)
-        
-        # Update last audio time
-        import time
-        self.client_states[client_id]["last_audio_time"] = time.time()
-        
-        # Only process audio if we have enough data (e.g., 1 second worth)
-        # Assuming 24kHz, 16-bit mono: 24000 * 2 = 48000 bytes per second
-        MIN_BUFFER_SIZE = 48000  # 1 second of audio
-        
-        if len(self.audio_buffers[client_id]) >= MIN_BUFFER_SIZE:
-            # Send buffered audio to RunPod
-            buffered_audio = bytes(self.audio_buffers[client_id])
-            self.audio_buffers[client_id].clear()  # Clear buffer after sending
             
+        # Verify chunk size
+        if len(audio_data) != MIN_BUFFER_SIZE:
+            logger.warning(f"⚠️ Received unexpected audio chunk size: {len(audio_data)} bytes")
+            return
+            
+        try:
+            # Extract header information (timestamp and flags)
+            import struct
+            timestamp, flags = struct.unpack('>II', audio_data[:HEADER_BYTES])
+            is_tts_playing = bool(flags & 1)
+            
+            # Update client state
+            self.client_states[client_id]["tts_playing"] = is_tts_playing
+            self.client_states[client_id]["last_audio_time"] = timestamp
+            
+            # Extract audio samples
+            audio_samples = audio_data[HEADER_BYTES:]
+            
+            # Send to RunPod immediately since we have a complete batch
             try:
                 import base64
-                audio_b64 = base64.b64encode(buffered_audio).decode('utf-8')
+                audio_b64 = base64.b64encode(audio_samples).decode('utf-8')
                 
                 runpod_payload = {
                     "input": {
                         "audio_data": audio_b64,
                         "client_id": client_id,
                         "message_type": "audio_batch",
-                        "audio_length": len(buffered_audio),
-                        "tts_playing": self.client_states[client_id].get("tts_playing", False)
+                        "audio_length": len(audio_samples),
+                        "tts_playing": is_tts_playing,
+                        "timestamp": timestamp
                     }
                 }
                 
-                logger.info(f"🎵 Sending audio batch to RunPod: {len(buffered_audio)} bytes")
+                logger.info(f"🎵 Processing audio batch: {len(audio_samples)} bytes, TTS playing: {is_tts_playing}")
                 result = await self.call_runpod_function(runpod_payload)
                 
                 # Send result back to client
@@ -166,6 +176,10 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"❌ Error processing audio batch: {e}")
                 await self.send_to_client(client_id, {"error": str(e)})
+                
+        except Exception as e:
+            logger.error(f"❌ Error parsing audio chunk: {e}")
+            await self.send_to_client(client_id, {"error": str(e)})
     
     async def handle_control_message(self, client_id: str, message: dict):
         """Handle control messages like tts_start, tts_stop, etc."""
