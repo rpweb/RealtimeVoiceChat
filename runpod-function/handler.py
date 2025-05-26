@@ -24,7 +24,7 @@ def initialize_components():
     global speech_pipeline_manager, audio_input_processor, upsampler
     
     if speech_pipeline_manager is None:
-        logger.info("🚀 Initializing RunPod function components...")
+        logger.info("🚀🚀🚀 Initializing RunPod function components...")
         
         # Initialize with default settings
         speech_pipeline_manager = SpeechPipelineManager(
@@ -43,7 +43,7 @@ def initialize_components():
             pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
         )
         
-        logger.info("✅ RunPod function components initialized")
+        logger.info("✅✅✅ RunPod function components initialized with return_aggregate_stream=FALSE")
 
 class VoiceChatProcessor:
     """Handles voice chat processing for RunPod serverless function."""
@@ -239,7 +239,7 @@ def handler(job):
         # Extract message type directly from input_data
         message_type = input_data.get("message_type", "")
         
-        logger.info(f"🔄 Processing message type: {message_type} for client: {client_id}")
+        logger.info(f"🔄🔄🔄 Processing message type: {message_type} for client: {client_id}")
         
         # Route based on message type
         if message_type == "audio_batch":
