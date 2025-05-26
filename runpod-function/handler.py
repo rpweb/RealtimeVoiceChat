@@ -161,16 +161,48 @@ class VoiceChatProcessor:
             # Wait for thread to finish
             tts_thread.join(timeout=2.0)
             
-            # Combine all audio chunks
+            # Combine all audio chunks and upsample from 24kHz to 48kHz
             if audio_chunks:
                 combined_audio = b''.join(audio_chunks)
-                audio_b64 = base64.b64encode(combined_audio).decode('utf-8')
                 logger.info(f"🔊 Generated {len(combined_audio)} bytes of TTS audio from {len(audio_chunks)} chunks")
                 
-                # Log first few bytes for debugging
-                if len(combined_audio) >= 10:
-                    first_samples = list(combined_audio[:10])
-                    logger.info(f"🔊 First 10 bytes: {first_samples}")
+                # Upsample from 24kHz to 48kHz using UpsampleOverlap
+                upsampled_chunks = []
+                
+                # Process audio in chunks for upsampling (similar to original server)
+                chunk_size = 4096  # Process in 4KB chunks
+                for i in range(0, len(combined_audio), chunk_size):
+                    chunk = combined_audio[i:i + chunk_size]
+                    if len(chunk) > 0:
+                        upsampled_b64 = upsampler.get_base64_chunk(chunk)
+                        if upsampled_b64:  # Only add non-empty chunks
+                            upsampled_chunks.append(upsampled_b64)
+                
+                # Get the final chunk
+                final_chunk = upsampler.flush_base64_chunk()
+                if final_chunk:
+                    upsampled_chunks.append(final_chunk)
+                
+                # Combine all upsampled chunks
+                if upsampled_chunks:
+                    # Decode all base64 chunks and combine
+                    upsampled_audio_parts = []
+                    for chunk_b64 in upsampled_chunks:
+                        chunk_bytes = base64.b64decode(chunk_b64)
+                        upsampled_audio_parts.append(chunk_bytes)
+                    
+                    upsampled_audio = b''.join(upsampled_audio_parts)
+                    audio_b64 = base64.b64encode(upsampled_audio).decode('utf-8')
+                    
+                    logger.info(f"🔊 Upsampled audio: {len(combined_audio)} bytes (24kHz) → {len(upsampled_audio)} bytes (48kHz)")
+                    
+                    # Log first few bytes for debugging
+                    if len(upsampled_audio) >= 10:
+                        first_samples = list(upsampled_audio[:10])
+                        logger.info(f"🔊 First 10 bytes (upsampled): {first_samples}")
+                else:
+                    logger.warning("⚠️ No upsampled audio generated")
+                    audio_b64 = base64.b64encode(combined_audio).decode('utf-8')  # Fallback to original
             else:
                 # Fallback: Generate a simple test tone instead of silence
                 logger.warning("⚠️ No TTS audio generated, using test tone")
