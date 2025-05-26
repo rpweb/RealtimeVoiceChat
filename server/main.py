@@ -346,16 +346,50 @@ class ConnectionManager:
             
             logger.info(f"🚀 Started streaming job: {job_id}")
             
-            # Step 2: Stream results in real-time
-            stream_response = await self.http_client.get(
+            # Step 2: Stream results in real-time using streaming response
+            all_chunks = []
+            
+            async with self.http_client.stream(
+                "GET",
                 f"{base_url}/{endpoint_id}/stream/{job_id}",
                 headers=headers,
-                timeout=30.0  # Increased timeout for real-time streaming
-            )
-            stream_response.raise_for_status()
+                timeout=30.0
+            ) as stream_response:
+                stream_response.raise_for_status()
+                
+                async for line in stream_response.aiter_lines():
+                    if not line.strip():
+                        continue
+                        
+                    try:
+                        # Parse each line as JSON (Server-Sent Events format)
+                        if line.startswith("data: "):
+                            line = line[6:]  # Remove "data: " prefix
+                        
+                        chunk_data = json.loads(line)
+                        logger.info(f"📡 Received streaming chunk: {chunk_data}")
+                        
+                        # Send chunk immediately to client
+                        all_chunks.append(chunk_data)
+                        await self.send_to_client(client_id, {
+                            "type": "stream_chunk", 
+                            "data": chunk_data
+                        })
+                        
+                        # Check if this is the final chunk
+                        if chunk_data.get("type") == "processing_complete":
+                            logger.info(f"🏁 Streaming complete for job {job_id}")
+                            break
+                            
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ Failed to parse streaming line: {line[:100]}...")
+                        continue
+                    except Exception as e:
+                        logger.error(f"❌ Error processing streaming chunk: {e}")
+                        continue
             
-            # Parse the streaming response
-            stream_data = stream_response.json()
+            # Create stream_data for compatibility with existing code
+            stream_data = {"stream": [{"output": chunk} for chunk in all_chunks]}
             
             # Debug: Log the raw response structure
             logger.info(f"🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
