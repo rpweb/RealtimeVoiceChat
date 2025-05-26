@@ -212,14 +212,9 @@ class ConnectionManager:
         if not RUNPOD_ENDPOINT or not RUNPOD_API_KEY:
             raise HTTPException(status_code=500, detail="RunPod not configured")
         
-        # Extract endpoint ID from URL if it's a full URL
-        if RUNPOD_ENDPOINT.startswith('https://'):
-            endpoint_id = RUNPOD_ENDPOINT.split('/')[-1]
-            base_url = 'https://api.runpod.ai/v2'
-        else:
-            # Assume it's just the endpoint ID
-            endpoint_id = RUNPOD_ENDPOINT
-            base_url = 'https://api.runpod.ai/v2'
+        # RUNPOD_ENDPOINT is just the endpoint ID
+        endpoint_id = RUNPOD_ENDPOINT
+        base_url = 'https://api.runpod.ai/v2'
         
         headers = {
             "Authorization": f"Bearer {RUNPOD_API_KEY}",
