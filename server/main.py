@@ -346,50 +346,17 @@ class ConnectionManager:
             
             logger.info(f"🚀 Started streaming job: {job_id}")
             
-            # Step 2: Stream results in real-time using streaming response
-            all_chunks = []
-            
-            async with self.http_client.stream(
-                "GET",
+            # Step 2: Get streaming response (RunPod returns single JSON, not SSE)
+            stream_response = await self.http_client.get(
                 f"{base_url}/{endpoint_id}/stream/{job_id}",
                 headers=headers,
                 timeout=30.0
-            ) as stream_response:
-                stream_response.raise_for_status()
-                
-                async for line in stream_response.aiter_lines():
-                    if not line.strip():
-                        continue
-                        
-                    try:
-                        # Parse each line as JSON (Server-Sent Events format)
-                        if line.startswith("data: "):
-                            line = line[6:]  # Remove "data: " prefix
-                        
-                        chunk_data = json.loads(line)
-                        logger.info(f"📡 Received streaming chunk: {chunk_data}")
-                        
-                        # Send chunk immediately to client
-                        all_chunks.append(chunk_data)
-                        await self.send_to_client(client_id, {
-                            "type": "stream_chunk", 
-                            "data": chunk_data
-                        })
-                        
-                        # Check if this is the final chunk
-                        if chunk_data.get("type") == "processing_complete":
-                            logger.info(f"🏁 Streaming complete for job {job_id}")
-                            break
-                            
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"⚠️ Failed to parse streaming line: {line[:100]}...")
-                        continue
-                    except Exception as e:
-                        logger.error(f"❌ Error processing streaming chunk: {e}")
-                        continue
+            )
+            stream_response.raise_for_status()
             
-            # Create stream_data for compatibility with existing code
-            stream_data = {"stream": [{"output": chunk} for chunk in all_chunks]}
+            # Parse the streaming response
+            stream_data = stream_response.json()
+            logger.info(f"📡 Received streaming chunk: {stream_data}")
             
             # Debug: Log the raw response structure
             logger.info(f"🔍 RunPod response keys: {list(stream_data.keys()) if isinstance(stream_data, dict) else 'not a dict'}")
@@ -403,8 +370,10 @@ class ConnectionManager:
                     for i, stream_item in enumerate(stream_data['stream']):
                         logger.info(f"🔍 Stream item {i}: {list(stream_item.keys()) if isinstance(stream_item, dict) else 'not a dict'}")
                         if isinstance(stream_item, dict) and 'output' in stream_item:
-                            chunks_to_process.append(stream_item['output'])
-                            logger.info(f"🔍 Added chunk {i}: {stream_item['output'].get('type', 'no type') if isinstance(stream_item['output'], dict) else 'not a dict'}")
+                            output_chunk = stream_item['output']
+                            chunks_to_process.append(output_chunk)
+                            chunk_type = output_chunk.get('type', 'no type') if isinstance(output_chunk, dict) else 'not a dict'
+                            logger.info(f"🔍 Added chunk {i}: {chunk_type}")
                 elif 'output' in stream_data:
                     # Check if output is an array of chunks or a single chunk
                     if isinstance(stream_data['output'], list):
