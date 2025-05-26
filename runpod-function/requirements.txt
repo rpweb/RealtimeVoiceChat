@@ -1,0 +1,20 @@
+runpod==1.6.2
+
+# transformers (PyTorch installed separately with CUDA support)
+transformers==4.47.0
+
+# speech to text and text to speech
+realtimestt==0.3.104
+realtimetts[kokoro,coqui,orpheus]==0.5.5
+
+# configuration
+python-dotenv
+
+# llm providers
+openai
+
+# Additional dependencies for audio processing
+numpy
+scipy
+librosa
+soundfile 

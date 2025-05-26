@@ -1,50 +1,46 @@
 # RealtimeVoiceChat
 
-A comprehensive real-time voice chat system with AI, phone call integration, and tool capabilities.
+A comprehensive real-time voice chat system with AI integration, featuring a distributed architecture for scalable deployment.
 
 ## Architecture
 
-This project uses a modern distributed architecture with three main components:
+This project uses a modern distributed architecture with two main components:
 
-1. **Vercel Next.js Frontend**
-   - Simple, responsive web interface
-   - Vercel AI SDK for streaming responses
-   - Socket.IO for real-time updates
-   - Supports both text and voice input/output
+1. **Railway FastAPI Server** (`/server`)
+   - Lightweight FastAPI server for web interface
+   - WebSocket management for real-time communication
+   - Proxy to RunPod serverless function
+   - Static file serving for the web UI
+   - Health check endpoints for Railway
 
-2. **Railway Node.js Backend**
-   - Handles session management
-   - Orchestrates tool usage
-   - Integrates with Twilio for phone calls
-   - Socket.IO server for real-time communication
-   - Provides RunPod endpoints configuration
-   - Securely proxies ML model API calls
-
-3. **RunPod ML Workers**
-   - Whisper Worker: Speech-to-text using Faster Whisper
-   - LLM Worker: Language model inference using vLLM
-   - TTS Worker: Text-to-speech using Piper TTS
+2. **RunPod Serverless Function** (`/runpod-function`)
+   - GPU-accelerated AI processing
+   - Speech-to-text using RealtimeSTT
+   - Text-to-speech using RealtimeTTS (Coqui/Kokoro/Orpheus)
+   - LLM inference with OpenAI/HuggingFace models
+   - Session management and conversation history
 
 ## Features
 
-- **Multi-modal Interaction**: Chat with the AI via text, voice, or phone call
-- **Real-time Streaming**: Get responses as they're generated
-- **Tool Framework**: Extend functionality with custom tools
-- **Session Management**: Support multiple users and conversations
-- **Phone Integration**: Call the AI using regular phone calls via Twilio
-- **Cost-effective**: Uses open-source ML models on RunPod serverless
-- **Dynamic ML Endpoints**: Auto-fetches RunPod endpoints configuration
-- **Secure Design**: RunPod API keys are never exposed to the client
-- **Automated Deployment**: CI/CD for both Railway backend and RunPod workers
+- **Real-time Voice Chat**: Seamless voice-to-voice conversation with AI
+- **Multi-modal Interaction**: Support for both text and voice input/output
+- **GPU-accelerated Processing**: Fast inference using RunPod serverless
+- **Session Management**: Multiple concurrent user sessions
+- **Cost-effective**: Pay-per-use RunPod serverless + lightweight Railway hosting
+- **Scalable Architecture**: Separate compute and web serving layers
+- **Modern Tech Stack**: FastAPI, WebSockets, RealtimeSTT/TTS
+- **Easy Deployment**: Simple Railway + RunPod deployment
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18 or higher
-- pnpm 8 or higher
+- Python 3.10 or higher
+- Docker (for RunPod deployment)
+- Railway account
+- RunPod account
 
-### Setup
+### Local Development
 
 1. Clone the repository:
    ```bash
@@ -52,113 +48,103 @@ This project uses a modern distributed architecture with three main components:
    cd RealtimeVoiceChat
    ```
 
-2. Run the initialization script:
+2. Start the Railway server locally:
    ```bash
-   ./init.sh
+   cd server
+   pip install -r requirements.txt
+   python main.py
    ```
 
-3. Start the development servers:
-   ```bash
-   pnpm dev
-   ```
+3. Open [http://localhost:8000](http://localhost:8000) to access the web interface
 
-4. Open [http://localhost:3000](http://localhost:3000) to access the client app
+### Deployment
 
-## Development with pnpm Workspaces
+See the individual README files:
+- [Railway Server Deployment](./server/README.md)
+- [RunPod Function Deployment](./runpod-function/README.md)
 
-This project uses pnpm workspaces to manage multiple packages:
+## Project Structure
 
-```bash
-# Install all dependencies
-pnpm install
-
-# Run only the client
-pnpm dev:client
-
-# Run only the server
-pnpm dev:server
-
-# Run both client and server
-pnpm dev
-
-# Build all packages
-pnpm build
-
-# Build specific packages
-pnpm build:client
-pnpm build:server
+```
+RealtimeVoiceChat/
+├── server/                 # Railway FastAPI server
+│   ├── main.py            # Main server application
+│   ├── requirements.txt   # Python dependencies
+│   ├── railway.toml       # Railway configuration
+│   ├── static/            # Web interface files
+│   └── README.md          # Server deployment guide
+├── runpod-function/       # RunPod serverless function
+│   ├── handler.py         # Main function handler
+│   ├── requirements.txt   # Python dependencies
+│   ├── Dockerfile         # Container configuration
+│   ├── *.py              # AI processing modules
+│   └── README.md          # Function deployment guide
+└── code/                  # Original monolithic code (legacy)
 ```
 
 ## Deployment
 
-### RunPod Workers
+### 1. Set up GitHub Secrets
 
-The ML workers are deployed automatically to RunPod Serverless via GitHub Actions:
+Add these secrets to your GitHub repository for automated deployment:
+- `DOCKERHUB_USERNAME`: Your Docker Hub username
+- `DOCKERHUB_TOKEN`: Your Docker Hub access token
+- `RAILWAY_TOKEN`: Your Railway API token (optional, for automated Railway deployment)
 
-1. Build Docker images for each worker
-2. Push to Docker Hub
-3. Deploy to RunPod Serverless
+### 2. Deploy RunPod Function (Automatic)
 
-### Railway Backend (Automated)
+1. **Push changes** to trigger GitHub Actions:
+   ```bash
+   git add .
+   git commit -m "Deploy RunPod function"
+   git push
+   ```
 
-The backend server is deployed automatically to Railway via GitHub Actions:
+2. **GitHub Actions will automatically**:
+   - Build the Docker image with CUDA 12.1.1
+   - Push to Docker Hub as `yourusername/realtime-voice-chat-runpod:latest`
 
-1. Set up a Railway project and get an API token
-2. Add the token as a GitHub secret: `RAILWAY_TOKEN`
-3. Push to the main branch to trigger deployment
-4. The workflow uses the `railway.Dockerfile` and `railway.toml` configuration
+3. **Create RunPod template**:
+   - Use the automatically built image
+   - Set container disk size to at least 20GB
+   - Choose GPU type (recommended: RTX 4090 or A100)
 
-Manual deployment is also possible:
-```bash
-railway login
-railway link # Link to your project
-railway up   # Deploy the project
-```
+4. **Deploy as serverless function** and note the endpoint URL
 
-### Vercel Frontend
+### 3. Deploy Railway Server
 
-The client application is deployed on Vercel:
-
-1. Push to the Vercel GitHub integration
-2. Set environment variables in Vercel dashboard
-3. Deploy
-
-#### Automatic Backend URL Configuration
-
-To automatically make your Railway backend URL available to your Vercel frontend:
-
-1. In your Railway project, go to Settings > Integrations
-2. Add the Vercel integration and connect to your Vercel account
-3. Select your Vercel project (the client app)
-4. Railway will automatically export your backend URL as an environment variable
-5. In your Vercel project settings, map the Railway variable to `NEXT_PUBLIC_BACKEND_URL`
-
-This eliminates the need to manually configure the backend URL in Vercel.
+1. **Connect your GitHub repository** to Railway
+2. **Set environment variables** in Railway dashboard:
+   - `RUNPOD_ENDPOINT`: Your RunPod function endpoint URL
+   - `RUNPOD_API_KEY`: Your RunPod API key
+3. **Deploy** using Railway's automatic detection of `railway.toml`
 
 ## Configuration
 
 ### Environment Variables
 
-**Vercel Frontend**:
-- `NEXT_PUBLIC_BACKEND_URL`: URL of the Railway backend server
+**Railway Server**:
+- `RUNPOD_ENDPOINT`: RunPod serverless function endpoint URL
+- `RUNPOD_API_KEY`: RunPod API key for authentication
+- `PORT`: Server port (automatically set by Railway)
 
-**Railway Backend**:
-- `RUNPOD_API_KEY`: RunPod API key (securely stored on the server only)
-- `CLIENT_ORIGIN`: URL of your Vercel app (for CORS)
-- `TWILIO_ACCOUNT_SID`: Twilio account SID
-- `TWILIO_AUTH_TOKEN`: Twilio auth token
-- `TWILIO_PHONE_NUMBER`: Twilio phone number
-
-### GitHub Secrets for CI/CD
-
-- `RAILWAY_TOKEN`: Railway API token for automated deployment
-- `RUNPOD_API_KEY`: RunPod API key for deploying serverless workers
-- `DOCKERHUB_USERNAME`: Docker Hub username for pushing images
-- `DOCKERHUB_TOKEN`: Docker Hub token for authentication
+**RunPod Function**:
+- `OPENAI_API_KEY`: OpenAI API key (if using OpenAI models)
+- `HF_TOKEN`: Hugging Face token (if using HF models)
 
 ## Development
 
-This project uses pnpm as the package manager. See individual README files in each component directory:
-- [Client App](./client-app/README.md)
-- [Server](./server/README.md)
-- [RunPod Workers](./runpod_workers/README.md)
+See individual README files for detailed instructions:
+- [Railway Server](./server/README.md)
+- [RunPod Function](./runpod-function/README.md)
+
+## Migration from Original Code
+
+The original monolithic code in the `/code` directory has been split into:
+- **Server component**: Lightweight FastAPI proxy server for Railway
+- **Function component**: Heavy AI processing for RunPod serverless
+
+This architecture provides:
+- **Cost efficiency**: Pay only for GPU usage when processing
+- **Scalability**: Automatic scaling on both platforms
+- **Simplicity**: Easier deployment and maintenance
