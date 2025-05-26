@@ -32,9 +32,9 @@ let typingUser = "";
 let typingAssistant = "";
 
 // --- batching + fixed 8‑byte header setup ---
-const BATCH_SAMPLES = 2048;
+const BATCH_SAMPLES = 2400;   // 100ms at 24kHz - ultra-low latency for real-time
 const HEADER_BYTES  = 8;
-const FRAME_BYTES   = BATCH_SAMPLES * 2;
+const FRAME_BYTES   = BATCH_SAMPLES * 2;  // 16-bit samples = 2 bytes per sample
 const MESSAGE_BYTES = HEADER_BYTES + FRAME_BYTES;
 
 const bufferPool = [];
@@ -53,12 +53,26 @@ function initBatch() {
 }
 
 function flushBatch() {
-  const ts = Date.now() & 0xFFFFFFFF;
-  batchView.setUint32(0, ts, false);
-  const flags = isTTSPlaying ? 1 : 0;
-  batchView.setUint32(4, flags, false);
+  // Simple voice activity detection - check if audio has sufficient energy
+  let audioEnergy = 0;
+  for (let i = 0; i < batchOffset; i++) {
+    audioEnergy += Math.abs(batchInt16[i]);
+  }
+  const avgEnergy = audioEnergy / batchOffset;
+  const energyThreshold = 100; // Adjust based on testing
+  
+  // Only send if there's sufficient audio activity
+  if (avgEnergy > energyThreshold) {
+    const ts = Date.now() & 0xFFFFFFFF;
+    batchView.setUint32(0, ts, false);
+    const flags = isTTSPlaying ? 1 : 0;
+    batchView.setUint32(4, flags, false);
 
-  socket.send(batchBuffer);
+    socket.send(batchBuffer);
+    console.log(`🎵 Sent audio batch with energy: ${avgEnergy.toFixed(1)}`);
+  } else {
+    console.log(`🔇 Skipped silent batch (energy: ${avgEnergy.toFixed(1)})`);
+  }
 
   bufferPool.push(batchBuffer);
   batchBuffer = null;
@@ -313,7 +327,16 @@ document.getElementById("startBtn").onclick = async () => {
     if (typeof evt.data === "string") {
       try {
         const msg = JSON.parse(evt.data);
-        handleJSONMessage(msg);
+        
+        // Handle streaming messages
+        if (msg.type === "stream_chunk") {
+          handleStreamChunk(msg.data);
+        } else if (msg.type === "stream_complete") {
+          console.log("🎉 Streaming complete for job:", msg.job_id);
+        } else {
+          // Handle regular messages
+          handleJSONMessage(msg);
+        }
       } catch (e) {
         console.error("Error parsing message:", e);
       }
@@ -353,6 +376,77 @@ document.getElementById("copyBtn").onclick = () => {
     .then(() => console.log("Conversation copied to clipboard"))
     .catch(err => console.error("Copy failed:", err));
 };
+
+function handleStreamChunk(data) {
+  console.log("📡 Stream chunk received:", data);
+  
+  if (data.type === "audio_received") {
+    console.log("🎵 Audio received, processing...");
+    statusDiv.textContent = "Processing audio...";
+  } 
+  else if (data.type === "audio_preprocessing") {
+    console.log("🔧 Audio preprocessing complete");
+    statusDiv.textContent = "Preprocessing audio...";
+  }
+  else if (data.type === "speech_recognition") {
+    console.log("🗣️ Speech recognition:", data.text);
+    statusDiv.textContent = "Recognizing speech...";
+    
+    // Show transcription in real-time
+    if (data.text) {
+      typingUser = escapeHtml(data.text);
+      renderMessages();
+    }
+  }
+  else if (data.type === "llm_response") {
+    console.log("🤖 LLM response:", data.text);
+    statusDiv.textContent = "Generating response...";
+    
+    // Show assistant response in real-time
+    if (data.text) {
+      typingAssistant = escapeHtml(data.text);
+      renderMessages();
+    }
+  }
+  else if (data.type === "tts_generation") {
+    console.log("🔊 TTS generation complete");
+    statusDiv.textContent = "Generating speech...";
+    
+    // Play the generated audio immediately
+    if (data.audio_data && ttsWorkletNode) {
+      try {
+        const audioData = base64ToInt16Array(data.audio_data);
+        ttsWorkletNode.port.postMessage(audioData);
+      } catch (e) {
+        console.error("Error playing TTS audio:", e);
+      }
+    }
+  }
+  else if (data.type === "processing_complete") {
+    console.log("✅ Processing complete");
+    statusDiv.textContent = "Recording...";
+    
+    // Finalize the conversation
+    if (data.final_text) {
+      // Add user message if we have transcription
+      if (typingUser) {
+        chatHistory.push({ role: "user", content: typingUser, type: "final" });
+      }
+      
+      // Add assistant response
+      chatHistory.push({ role: "assistant", content: data.final_text, type: "final" });
+      
+      // Clear typing indicators
+      typingUser = "";
+      typingAssistant = "";
+      renderMessages();
+    }
+  }
+  else if (data.type === "error") {
+    console.error("❌ Stream error:", data.message);
+    statusDiv.textContent = "Error: " + data.message;
+  }
+}
 
 // First render
 renderMessages();

@@ -21,10 +21,10 @@ RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "")
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY", "")
 
 # Audio processing configuration
-BATCH_SAMPLES = 2048  # Match client's batch size
+BATCH_SAMPLES = 2400   # 100ms at 24kHz (matches client, ultra-low latency)
 HEADER_BYTES = 8      # Match client's header size
 FRAME_BYTES = BATCH_SAMPLES * 2  # 16-bit samples = 2 bytes per sample
-MIN_BUFFER_SIZE = FRAME_BYTES + HEADER_BYTES  # Total expected message size
+MIN_BUFFER_SIZE = FRAME_BYTES + HEADER_BYTES  # Total expected message size: 4808 bytes
 
 if not RUNPOD_ENDPOINT or not RUNPOD_API_KEY:
     logger.warning("⚠️ RunPod endpoint or API key not configured. Set RUNPOD_ENDPOINT and RUNPOD_API_KEY environment variables.")
@@ -44,9 +44,6 @@ class NoCacheStaticFiles(StaticFiles):
 async def lifespan(app: FastAPI):
     """Manages the application's lifespan."""
     logger.info("🚀 Railway server starting up")
-    # Start the audio buffer flusher task
-    manager._flusher_task = asyncio.create_task(manager._audio_buffer_flusher())
-    logger.info("🧹 Started audio buffer flusher task")
     
     yield
     
@@ -92,16 +89,13 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.http_client = httpx.AsyncClient(timeout=30.0)
-        # Audio buffering per client
-        self.audio_buffers: Dict[str, bytearray] = {}
+        # Client state tracking
         self.client_states: Dict[str, dict] = {}
-        self._flusher_task = None  # Will be set when the app starts
     
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
         self.active_connections[client_id] = websocket
-        # Initialize client buffers and state
-        self.audio_buffers[client_id] = bytearray()
+        # Initialize client state
         self.client_states[client_id] = {
             "is_recording": False,
             "tts_playing": False,
@@ -112,9 +106,7 @@ class ConnectionManager:
     def disconnect(self, client_id: str):
         if client_id in self.active_connections:
             del self.active_connections[client_id]
-        # Clean up client buffers and state
-        if client_id in self.audio_buffers:
-            del self.audio_buffers[client_id]
+        # Clean up client state
         if client_id in self.client_states:
             del self.client_states[client_id]
         logger.info(f"🔌 Client {client_id} disconnected")
@@ -128,10 +120,7 @@ class ConnectionManager:
                 self.disconnect(client_id)
     
     async def process_audio_chunk(self, client_id: str, audio_data: bytes):
-        """Process fixed-size audio chunks with header information."""
-        if client_id not in self.audio_buffers:
-            return
-            
+        """Process fixed-size audio chunks with streaming."""
         # Verify chunk size
         if len(audio_data) != MIN_BUFFER_SIZE:
             logger.warning(f"⚠️ Received unexpected audio chunk size: {len(audio_data)} bytes")
@@ -150,7 +139,7 @@ class ConnectionManager:
             # Extract audio samples
             audio_samples = audio_data[HEADER_BYTES:]
             
-            # Send to RunPod immediately since we have a complete batch
+            # Send to RunPod with streaming
             try:
                 import base64
                 audio_b64 = base64.b64encode(audio_samples).decode('utf-8')
@@ -167,19 +156,16 @@ class ConnectionManager:
                 }
                 
                 logger.info(f"🎵 Processing audio batch: {len(audio_samples)} bytes, TTS playing: {is_tts_playing}")
-                result = await self.call_runpod_function(runpod_payload)
-                
-                # Send result back to client
-                if "output" in result:
-                    await self.send_to_client(client_id, result["output"])
+                # Use streaming call - this will handle sending chunks to client
+                await self.call_runpod_function(runpod_payload)
                     
             except Exception as e:
                 logger.error(f"❌ Error processing audio batch: {e}")
-                await self.send_to_client(client_id, {"error": str(e)})
+                await self.send_to_client(client_id, {"type": "error", "message": str(e)})
                 
         except Exception as e:
             logger.error(f"❌ Error parsing audio chunk: {e}")
-            await self.send_to_client(client_id, {"error": str(e)})
+            await self.send_to_client(client_id, {"type": "error", "message": str(e)})
     
     async def handle_control_message(self, client_id: str, message: dict):
         """Handle control messages like tts_start, tts_stop, etc."""
@@ -195,15 +181,12 @@ class ConnectionManager:
             
         elif message_type == "clear_history":
             logger.info(f"🗑️ Client {client_id} cleared chat history")
-            # Clear any buffered audio too
-            if client_id in self.audio_buffers:
-                self.audio_buffers[client_id].clear()
-                
+            
         elif message_type == "set_speed":
             speed = message.get("speed", 1)
             logger.info(f"⚡ Client {client_id} set speed to {speed}")
             
-        # Forward control messages to RunPod
+        # Forward control messages to RunPod with streaming
         try:
             runpod_payload = {
                 "input": {
@@ -213,95 +196,107 @@ class ConnectionManager:
                 }
             }
             
-            result = await self.call_runpod_function(runpod_payload)
-            
-            # Send result back to client
-            if "output" in result:
-                await self.send_to_client(client_id, result["output"])
+            # Use streaming call
+            await self.call_runpod_function(runpod_payload)
                 
         except Exception as e:
             logger.error(f"❌ Error processing control message: {e}")
-            await self.send_to_client(client_id, {"error": str(e)})
+            await self.send_to_client(client_id, {"type": "error", "message": str(e)})
 
     async def cleanup(self):
         """Clean up resources."""
-        if self._flusher_task:
-            self._flusher_task.cancel()
-            try:
-                await self._flusher_task
-            except asyncio.CancelledError:
-                pass
         await self.http_client.aclose()
 
-    async def _audio_buffer_flusher(self):
-        """Background task to flush audio buffers after timeout."""
-        while True:
-            try:
-                await asyncio.sleep(2)  # Check every 2 seconds
-                current_time = __import__('time').time()
-                
-                for client_id in list(self.client_states.keys()):
-                    if client_id not in self.audio_buffers:
-                        continue
-                        
-                    last_audio_time = self.client_states[client_id].get("last_audio_time", 0)
-                    buffer_size = len(self.audio_buffers[client_id])
-                    
-                    # If buffer has data and hasn't received audio for 3 seconds, flush it
-                    if buffer_size > 0 and (current_time - last_audio_time) > 3.0:
-                        logger.info(f"⏰ Flushing audio buffer for {client_id} after timeout: {buffer_size} bytes")
-                        
-                        buffered_audio = bytes(self.audio_buffers[client_id])
-                        self.audio_buffers[client_id].clear()
-                        
-                        try:
-                            import base64
-                            audio_b64 = base64.b64encode(buffered_audio).decode('utf-8')
-                            
-                            runpod_payload = {
-                                "input": {
-                                    "audio_data": audio_b64,
-                                    "client_id": client_id,
-                                    "message_type": "audio_batch_timeout",
-                                    "audio_length": len(buffered_audio),
-                                    "tts_playing": self.client_states[client_id].get("tts_playing", False)
-                                }
-                            }
-                            
-                            result = await self.call_runpod_function(runpod_payload)
-                            
-                            if "output" in result:
-                                await self.send_to_client(client_id, result["output"])
-                                
-                        except Exception as e:
-                            logger.error(f"❌ Error flushing audio buffer: {e}")
-                            
-            except Exception as e:
-                logger.error(f"❌ Error in audio buffer flusher: {e}")
-
     async def call_runpod_function(self, payload: dict) -> dict:
-        """Call the RunPod serverless function."""
+        """Call the RunPod serverless function with streaming support."""
         if not RUNPOD_ENDPOINT or not RUNPOD_API_KEY:
             raise HTTPException(status_code=500, detail="RunPod not configured")
+        
+        # Extract endpoint ID from URL if it's a full URL
+        if RUNPOD_ENDPOINT.startswith('https://'):
+            endpoint_id = RUNPOD_ENDPOINT.split('/')[-1]
+            base_url = 'https://api.runpod.ai/v2'
+        else:
+            # Assume it's just the endpoint ID
+            endpoint_id = RUNPOD_ENDPOINT
+            base_url = 'https://api.runpod.ai/v2'
         
         headers = {
             "Authorization": f"Bearer {RUNPOD_API_KEY}",
             "Content-Type": "application/json"
         }
         
+        client_id = payload.get("input", {}).get("client_id")
+        
         try:
+            # Step 1: Start the async job (reduced timeout)
             response = await self.http_client.post(
-                RUNPOD_ENDPOINT,
+                f"{base_url}/{endpoint_id}/run",
                 json=payload,
-                headers=headers
+                headers=headers,
+                timeout=3.0  # Reduced from 5.0s to 3.0s
             )
             response.raise_for_status()
-            return response.json()
+            job_data = response.json()
+            job_id = job_data.get('id')
+            
+            if not job_id:
+                raise ValueError("No job ID returned from RunPod")
+            
+            logger.info(f"🚀 Started streaming job: {job_id}")
+            
+            # Step 2: Stream results with optimized timeout
+            stream_response = await self.http_client.get(
+                f"{base_url}/{endpoint_id}/stream/{job_id}",
+                headers=headers,
+                timeout=15.0  # Reduced from 30.0s to 15.0s
+            )
+            stream_response.raise_for_status()
+            
+            # Parse the streaming response
+            stream_data = stream_response.json()
+            
+            # Send each chunk to the client as it arrives
+            if isinstance(stream_data, list):
+                for chunk in stream_data:
+                    if "output" in chunk:
+                        await self.send_to_client(client_id, {
+                            "type": "stream_chunk",
+                            "data": chunk["output"]
+                        })
+            
+            # Send completion message
+            await self.send_to_client(client_id, {
+                "type": "stream_complete",
+                "job_id": job_id
+            })
+            
+            return {
+                "type": "streaming_complete",
+                "job_id": job_id,
+                "status": "success"
+            }
+            
+        except httpx.TimeoutException:
+            logger.error("❌ RunPod request timed out")
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "message": "Request timed out"
+            })
+            raise HTTPException(status_code=504, detail="RunPod request timed out")
         except httpx.RequestError as e:
             logger.error(f"❌ RunPod request error: {e}")
+            await self.send_to_client(client_id, {
+                "type": "error", 
+                "message": f"Request failed: {str(e)}"
+            })
             raise HTTPException(status_code=500, detail=f"RunPod request failed: {str(e)}")
         except httpx.HTTPStatusError as e:
             logger.error(f"❌ RunPod HTTP error: {e}")
+            await self.send_to_client(client_id, {
+                "type": "error",
+                "message": f"HTTP error: {str(e)}"
+            })
             raise HTTPException(status_code=500, detail=f"RunPod HTTP error: {str(e)}")
 
 manager = ConnectionManager()
