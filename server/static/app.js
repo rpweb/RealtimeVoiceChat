@@ -420,10 +420,18 @@ function handleStreamChunk(data) {
     if (data.audio_data && ttsWorkletNode) {
       try {
         const audioData = base64ToInt16Array(data.audio_data);
+        console.log(`🔊 Playing TTS audio: ${audioData.length} samples`);
+        
+        // Check if audio has any non-zero values
+        const hasAudio = audioData.some(sample => Math.abs(sample) > 100);
+        console.log(`🔊 Audio has content: ${hasAudio}`);
+        
         ttsWorkletNode.port.postMessage(audioData);
       } catch (e) {
         console.error("Error playing TTS audio:", e);
       }
+    } else {
+      console.warn("⚠️ No audio_data or ttsWorkletNode not available");
     }
   }
   else if (data.type === "processing_complete") {

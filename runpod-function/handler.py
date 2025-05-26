@@ -160,13 +160,19 @@ class VoiceChatProcessor:
             if audio_chunks:
                 combined_audio = b''.join(audio_chunks)
                 audio_b64 = base64.b64encode(combined_audio).decode('utf-8')
-                logger.info(f"🔊 Generated {len(combined_audio)} bytes of TTS audio")
+                logger.info(f"🔊 Generated {len(combined_audio)} bytes of TTS audio from {len(audio_chunks)} chunks")
+                
+                # Log first few bytes for debugging
+                if len(combined_audio) >= 10:
+                    first_samples = list(combined_audio[:10])
+                    logger.info(f"🔊 First 10 bytes: {first_samples}")
             else:
                 # Fallback to silence if no audio generated
                 logger.warning("⚠️ No TTS audio generated, using silence")
                 silence_samples = 24000  # 1 second of silence at 24kHz
                 silence_audio = b'\x00' * (silence_samples * 2)  # 16-bit samples
                 audio_b64 = base64.b64encode(silence_audio).decode('utf-8')
+                logger.info(f"🔊 Using {len(silence_audio)} bytes of silence audio")
             
             yield {
                 "type": "tts_generation",
