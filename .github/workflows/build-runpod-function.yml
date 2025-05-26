@@ -17,8 +17,47 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    # Free up disk space
+    - name: Free up disk space
+      run: |
+        echo "Listing top 20 largest packages before cleanup"
+        sudo du -ha /usr/share | sort -rh | head -20
+        
+        echo "Removing unnecessary packages and cache"
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache
+        
+        # More aggressive cleanup
+        echo "Removing additional large packages"
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/share/swift
+        
+        # Clear apt cache
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        
+        # Clear npm and yarn cache
+        npm cache clean --force || true
+        yarn cache clean || true
+        
+        echo "Removing Docker images not needed for this build"
+        docker rmi $(docker images -aq) || true
+        
+        echo "Clearing Docker temporary build files"
+        docker builder prune -af
+        
+        echo "Current disk space"
+        df -h
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          image=moby/buildkit:latest
+          network=host
 
     - name: Log in to Docker Hub
       if: github.event_name != 'pull_request'
@@ -28,32 +67,37 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
+    # Set up Docker layer caching
+    - name: Set up Docker layer caching
+      uses: actions/cache@v3
       with:
-        images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-runpod-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-runpod-
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./runpod-function
-        file: ./runpod-function/Dockerfile
-        platforms: linux/amd64
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Image digest
+    # Try building with standard Docker instead of Buildx for less memory usage
+    - name: Build and push with standard Docker
       if: github.event_name != 'pull_request'
-      run: echo ${{ steps.build.outputs.digest }}
+      run: |
+        cd runpod-function
+        
+        # Pull the cache image if it exists
+        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache || true
+        
+        # Build the image with cache
+        docker build \
+          --cache-from ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache \
+          -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest \
+          -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+          -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          .
+        
+        # Push the images
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache
 
     - name: Update deployment info
       if: github.event_name != 'pull_request'
