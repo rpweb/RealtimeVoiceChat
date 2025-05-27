@@ -39,27 +39,14 @@ def initialize_components():
         start_time = time.time()
         
         try:
-            # Initialize upsampler first (fastest)
-            logger.info("📈 Initializing upsampler...")
-            upsampler = UpsampleOverlap()
+            # Use FAST PARALLEL loading for maximum speed
+            logger.info("⚡ Using FAST parallel model loading for maximum speed...")
+            from preinit import runtime_preload_models_fast
             
-            # Initialize speech pipeline manager (heaviest component)
-            logger.info("🗣️ Initializing speech pipeline manager...")
-            speech_pipeline_manager = SpeechPipelineManager(
-                tts_engine="coqui",
-                llm_provider="openai", 
-                llm_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
-                no_think=False,
-                orpheus_model="orpheus-3b-0.1-ft-Q8_0-GGUF/orpheus-3b-0.1-ft-q8_0.gguf",
-            )
+            speech_pipeline_manager, audio_input_processor, upsampler = runtime_preload_models_fast()
             
-            # Initialize audio input processor last
-            logger.info("🎤 Initializing audio input processor...")
-            audio_input_processor = AudioInputProcessor(
-                "en",  # language
-                is_orpheus=False,
-                pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
-            )
+            if speech_pipeline_manager is None:
+                raise Exception("Parallel model loading failed")
             
             _initialization_complete = True
             init_time = time.time() - start_time
