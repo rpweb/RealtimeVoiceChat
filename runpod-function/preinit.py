@@ -188,7 +188,19 @@ def runtime_preload_models_parallel():
             """Load AudioInputProcessor in parallel."""
             try:
                 logger.info("🎤 [PARALLEL] Loading AudioInputProcessor...")
+                import asyncio
                 from audio_in import AudioInputProcessor
+                
+                # Create event loop for this thread if none exists
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("Loop is closed")
+                except RuntimeError:
+                    logger.info("🎤 [PARALLEL] Creating new event loop for AudioInputProcessor...")
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
                 # Use default latency for now, will update after speech_pipeline loads
                 aip = AudioInputProcessor(
                     "en",  # language
@@ -200,6 +212,8 @@ def runtime_preload_models_parallel():
                 return aip
             except Exception as e:
                 logger.error(f"❌ [PARALLEL] AudioInputProcessor failed: {e}")
+                import traceback
+                logger.error(f"❌ [PARALLEL] AudioInputProcessor traceback: {traceback.format_exc()}")
                 errors['audio_processor'] = e
                 return None
         
@@ -348,7 +362,18 @@ def runtime_preload_models_fast():
             """Load AudioInputProcessor with optimized settings for speed."""
             try:
                 logger.info("🎤 [FAST] Loading AudioInputProcessor with speed optimizations...")
+                import asyncio
                 from audio_in import AudioInputProcessor
+                
+                # Create event loop for this thread if none exists
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("Loop is closed")
+                except RuntimeError:
+                    logger.info("🎤 [FAST] Creating new event loop for AudioInputProcessor...")
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
                 
                 # Use faster settings
                 aip = AudioInputProcessor(
@@ -361,6 +386,8 @@ def runtime_preload_models_fast():
                 return aip
             except Exception as e:
                 logger.error(f"❌ [FAST] AudioInputProcessor failed: {e}")
+                import traceback
+                logger.error(f"❌ [FAST] AudioInputProcessor traceback: {traceback.format_exc()}")
                 errors['audio_processor'] = e
                 return None
         
@@ -446,6 +473,63 @@ def runtime_preload_models_fast():
         
     except Exception as e:
         logger.error(f"❌ Error during FAST model pre-loading: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return None, None, None
+
+def runtime_preload_models_sequential():
+    """
+    Fallback: Pre-load models sequentially when parallel loading fails.
+    This is more reliable for components that need asyncio.
+    """
+    try:
+        logger.info("🔄 Starting SEQUENTIAL model pre-loading (fallback)...")
+        start_time = time.time()
+        
+        # Load SpeechPipelineManager first
+        logger.info("🔧 [SEQ] Loading SpeechPipelineManager...")
+        from speech_pipeline_manager import SpeechPipelineManager
+        speech_pipeline_manager = SpeechPipelineManager(
+            tts_engine="coqui",
+            llm_provider="openai", 
+            llm_model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+            no_think=True,  # Faster processing
+            orpheus_model=None,  # Skip orpheus for speed
+        )
+        logger.info("✅ [SEQ] SpeechPipelineManager loaded")
+        
+        # Load AudioInputProcessor second
+        logger.info("🎤 [SEQ] Loading AudioInputProcessor...")
+        from audio_in import AudioInputProcessor
+        audio_input_processor = AudioInputProcessor(
+            "en",  # language
+            is_orpheus=False,
+            pipeline_latency=speech_pipeline_manager.full_output_pipeline_latency / 1000,
+        )
+        logger.info("✅ [SEQ] AudioInputProcessor loaded")
+        
+        # Load UpsampleOverlap last
+        logger.info("📈 [SEQ] Loading UpsampleOverlap...")
+        from upsample_overlap import UpsampleOverlap
+        upsampler = UpsampleOverlap()
+        logger.info("✅ [SEQ] UpsampleOverlap loaded")
+        
+        # Quick test
+        logger.info("🧪 [SEQ] Running quick component tests...")
+        import struct
+        test_audio = b''.join([struct.pack('<h', i % 1000) for i in range(1024)])
+        processed = audio_input_processor.process_audio_chunk(test_audio)
+        upsampled_b64 = upsampler.get_base64_chunk(test_audio)
+        logger.info(f"🧪 [SEQ] Tests completed: {len(processed)} samples, {len(upsampled_b64)} chars")
+        
+        init_time = time.time() - start_time
+        logger.info(f"✅ SEQUENTIAL model pre-loading completed in {init_time:.2f}s")
+        logger.info("🚀 All models loaded sequentially and ready for processing!")
+        
+        return speech_pipeline_manager, audio_input_processor, upsampler
+        
+    except Exception as e:
+        logger.error(f"❌ Error during sequential model pre-loading: {e}")
         import traceback
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return None, None, None

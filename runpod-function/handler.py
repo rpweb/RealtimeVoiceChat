@@ -39,14 +39,18 @@ def initialize_components():
         start_time = time.time()
         
         try:
-            # Use FAST PARALLEL loading for maximum speed
-            logger.info("⚡ Using FAST parallel model loading for maximum speed...")
-            from preinit import runtime_preload_models_fast
+            # Try FAST PARALLEL loading first
+            logger.info("⚡ Trying FAST parallel model loading for maximum speed...")
+            from preinit import runtime_preload_models_fast, runtime_preload_models_sequential
             
             speech_pipeline_manager, audio_input_processor, upsampler = runtime_preload_models_fast()
             
             if speech_pipeline_manager is None:
-                raise Exception("Parallel model loading failed")
+                logger.warning("⚠️ Fast parallel loading failed, falling back to sequential loading...")
+                speech_pipeline_manager, audio_input_processor, upsampler = runtime_preload_models_sequential()
+                
+                if speech_pipeline_manager is None:
+                    raise Exception("Both parallel and sequential model loading failed")
             
             _initialization_complete = True
             init_time = time.time() - start_time
